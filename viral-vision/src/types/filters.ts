@@ -22,3 +22,4 @@ export const DEFAULT_FILTERS: SearchFilters = {
     channelSize: 'ALL',
     minViews: 'ALL',
 };
+ 

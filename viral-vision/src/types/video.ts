@@ -33,3 +33,4 @@ export interface UserPreferences {
     lastNiche: string;
     savedIdeas: SavedIdea[];
 }
+ 

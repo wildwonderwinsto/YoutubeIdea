@@ -119,3 +119,4 @@ export function enrichVideo(videoData: Omit<Video, 'viralScore' | 'engagementRat
 export function rankVideos(videos: Video[]): Video[] {
     return [...videos].sort((a, b) => b.viralScore - a.viralScore);
 }
+ 

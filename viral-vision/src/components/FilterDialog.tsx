@@ -113,3 +113,4 @@ export function FilterDialog({ filters, onFilterChange, trigger }: FilterDialogP
         </Dialog>
     );
 }
+ 
