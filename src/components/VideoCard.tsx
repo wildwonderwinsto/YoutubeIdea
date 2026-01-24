@@ -141,12 +141,30 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                             try {
                                 // Get download server URL from environment or default to localhost for dev
                                 const downloadServerUrl = import.meta.env.VITE_DOWNLOAD_SERVER_URL || 'http://localhost:3000';
-                                const downloadUrl = `${downloadServerUrl}/download?url=${encodeURIComponent(youtubeUrl)}`;
+                                
+                                // Sanitize filename for URL
+                                const sanitizedTitle = video.title
+                                    .replace(/[^a-z0-9]/gi, '_')
+                                    .substring(0, 100)
+                                    .toLowerCase() || 'video';
+                                
+                                const downloadUrl = `${downloadServerUrl}/download?url=${encodeURIComponent(youtubeUrl)}&filename=${encodeURIComponent(sanitizedTitle)}`;
 
-                                // Create a temporary link and trigger download
+                                // Use fetch to download the file with proper filename handling
+                                const response = await fetch(downloadUrl);
+                                
+                                if (!response.ok) {
+                                    throw new Error(`Download failed: ${response.statusText}`);
+                                }
+
+                                // Get the blob from the response
+                                const blob = await response.blob();
+                                
+                                // Create a blob URL and trigger download
+                                const blobUrl = window.URL.createObjectURL(blob);
                                 const a = document.createElement('a');
-                                a.href = downloadUrl;
-                                a.download = `${video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+                                a.href = blobUrl;
+                                a.download = `${sanitizedTitle}.mp4`;
                                 a.style.display = 'none';
                                 document.body.appendChild(a);
                                 a.click();
@@ -154,6 +172,7 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                                 // Cleanup
                                 setTimeout(() => {
                                     document.body.removeChild(a);
+                                    window.URL.revokeObjectURL(blobUrl);
                                 }, 100);
 
                                 toast({
