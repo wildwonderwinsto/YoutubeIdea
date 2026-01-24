@@ -9,7 +9,7 @@ export interface Video {
     views: number;
     likes: number;
     comments: number;
-    shares: number;
+    shares?: number;
     lengthSeconds: number;
     publishedAt: Date;
     fetchedAt: Date;
@@ -38,4 +38,4 @@ export interface UserPreferences {
     };
 }
 
- 
+

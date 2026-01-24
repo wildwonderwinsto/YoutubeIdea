@@ -11,14 +11,17 @@ const TARGET_REGIONS = ['US', 'GB', 'CA', 'AU', 'DE'];
  * Parse ISO 8601 duration to seconds (e.g., "PT1M30S" -> 90)
  */
 function parseISO8601Duration(duration: string): number {
-    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!duration || duration === 'P0D') return 0;
+
+    const match = duration.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (!match) return 0;
 
-    const hours = parseInt(match[1] || '0');
-    const minutes = parseInt(match[2] || '0');
-    const seconds = parseInt(match[3] || '0');
+    const days = parseInt(match[1] || '0');
+    const hours = parseInt(match[2] || '0');
+    const minutes = parseInt(match[3] || '0');
+    const seconds = parseInt(match[4] || '0');
 
-    return hours * 3600 + minutes * 60 + seconds;
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds;
 }
 
 /**
@@ -101,11 +104,12 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
             `${YOUTUBE_BASE_URL}/videos?` +
             `part=statistics,snippet,contentDetails&` +
             `id=${videoIds}&` +
-            `key=${YOUTUBE_API_KEY}`
+            `key=${apiKey}`
         );
 
         if (!statsResponse.ok) {
-            throw new Error(`YouTube API statistics request failed: ${statsResponse.statusText}`);
+            const errorData = await statsResponse.json().catch(() => ({}));
+            throw new Error(`YouTube API statistics request failed: ${errorData.error?.message || statsResponse.statusText}`);
         }
 
         const statsData = await statsResponse.json();
@@ -116,11 +120,12 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
             `${YOUTUBE_BASE_URL}/channels?` +
             `part=statistics&` +
             `id=${channelIds}&` +
-            `key=${YOUTUBE_API_KEY}`
+            `key=${apiKey}`
         );
 
         if (!channelResponse.ok) {
-            throw new Error(`YouTube API channel request failed: ${channelResponse.statusText}`);
+            const errorData = await channelResponse.json().catch(() => ({}));
+            throw new Error(`YouTube API channel request failed: ${errorData.error?.message || channelResponse.statusText}`);
         }
 
         const channelData = await channelResponse.json();
@@ -188,7 +193,7 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             `part=snippet&` +
             `playlistId=${uploadsPlaylistId}&` +
             `maxResults=5&` +
-            `key=${YOUTUBE_API_KEY}`
+            `key=${apiKey}`
         );
 
         const playlistData = await playlistResponse.json();
@@ -228,10 +233,19 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
  */
 export function extractChannelId(url: string): string | null {
     try {
+        const urlObj = new URL(url);
+        if (!urlObj.hostname.includes('youtube.com') && !urlObj.hostname.includes('youtu.be')) {
+            return null;
+        }
+
         // Format 1: youtube.com/@username
         if (url.includes('/@')) {
             const username = url.split('/@')[1].split('/')[0].split('?')[0];
-            return username; // Will need to resolve to channel ID via API
+            // Validate username format
+            if (!/^[a-zA-Z0-9_\-.]+$/.test(username)) {
+                return null;
+            }
+            return username;
         }
 
         // Format 2: youtube.com/channel/UC...
@@ -271,7 +285,7 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
             `${YOUTUBE_BASE_URL}/channels?` +
             `part=snippet&` +
             `id=${extractedId}&` +
-            `key=${YOUTUBE_API_KEY}`
+            `key=${apiKey}`
         );
 
         let data = await response.json();
@@ -301,4 +315,4 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
     }
 }
 
- 
+

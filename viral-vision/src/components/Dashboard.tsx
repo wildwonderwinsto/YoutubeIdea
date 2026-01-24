@@ -46,12 +46,14 @@ export function Dashboard({
     // Reset page on filter/tab change
     useEffect(() => {
         setCurrentPage(1);
-    }, [filters, activeTab, videos]);
+    }, [filters, activeTab, videos.length]);
 
     // Apply filters
     const filteredVideos = videos.filter(v => {
         // Region filter
-        if (filters.region !== 'ALL' && v.region !== filters.region) return false;
+        if (filters.region !== 'ALL') {
+            if (!v.region || v.region !== filters.region) return false;
+        }
 
         // Duration filter
         if (filters.duration === 'SHORT' && v.lengthSeconds >= 60) return false;
@@ -94,31 +96,53 @@ export function Dashboard({
     const outlierVideos = filteredVideos.filter(v => v.isOutlier && v.subscriberCount < 5000);
 
     // Prepare graph data from filtered set
-    const graphData = filteredVideos.map(v => ({
-        length: v.lengthSeconds,
-        avdTier: v.estimatedAVDTier === 'High' ? 100 : v.estimatedAVDTier === 'Medium' ? 60 : 30,
-        viralScore: v.viralScore,
-        title: v.title,
-        id: v.id,
-    }));
+    const graphData = filteredVideos
+        .filter(v => v.lengthSeconds > 0)
+        .map(v => ({
+            length: v.lengthSeconds,
+            avdTier: v.estimatedAVDTier === 'High' ? 100 : v.estimatedAVDTier === 'Medium' ? 60 : 30,
+            viralScore: v.viralScore,
+            title: v.title.length > 60 ? v.title.slice(0, 57) + '...' : v.title,
+            id: v.id,
+        }));
 
     // Load explanations for strategy feed
     useEffect(() => {
-        if (activeTab === 'strategy' && currentVideos.length > 0) {
-            // Only explain currently visible videos to save quota/performance
-            const visibleStrategyVideos = currentVideos.slice(0, 5);
+        if (activeTab !== 'strategy' || currentVideos.length === 0) return;
 
-            visibleStrategyVideos.forEach(async (video) => {
+        let cancelled = false;
+
+        const loadExplanations = async () => {
+            // Only process currently visible videos
+            const visibleVideos = currentVideos.slice(0, 5);
+
+            // Sequential loading to respect rate limits and avoid race conditions
+            for (const video of visibleVideos) {
+                if (cancelled) break;
+
+                // Skip if already loaded or loading (simple check)
                 if (!explanations[video.id]) {
                     try {
                         const explanation = await generateWhyItWorksExplanation(video);
-                        setExplanations(prev => ({ ...prev, [video.id]: explanation }));
+                        if (!cancelled) {
+                            // Use functional update to ensure we don't overwrite other parallel updates if any
+                            setExplanations(prev => ({ ...prev, [video.id]: explanation }));
+                        }
                     } catch (error) {
-                        console.error('Failed to load explanation:', error);
+                        if (!cancelled) {
+                            console.error(`Failed to load explanation for ${video.id}:`, error);
+                            setExplanations(prev => ({ ...prev, [video.id]: "Analysis unavailable." }));
+                        }
                     }
                 }
-            });
-        }
+            }
+        };
+
+        loadExplanations();
+
+        return () => {
+            cancelled = true;
+        };
     }, [activeTab, currentVideos, explanations]);
 
     return (
@@ -440,4 +464,4 @@ export function Dashboard({
     );
 }
 
- 
+

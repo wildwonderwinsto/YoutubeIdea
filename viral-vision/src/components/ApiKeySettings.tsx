@@ -18,7 +18,7 @@ export function ApiKeySettings() {
             setYoutubeKey(preferences.apiKeys?.youtube || '');
             setGeminiKey(preferences.apiKeys?.gemini || '');
         }
-    }, [isOpen, preferences.apiKeys]);
+    }, [isOpen, preferences.apiKeys?.youtube, preferences.apiKeys?.gemini]);
 
     const handleSave = () => {
         updateApiKeys({
@@ -181,4 +181,4 @@ export function ApiKeySettings() {
         </Dialog>
     );
 }
- 
+

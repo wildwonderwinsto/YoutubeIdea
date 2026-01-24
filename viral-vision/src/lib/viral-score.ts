@@ -8,17 +8,19 @@ import { Video } from '@/types/video';
  * - Engagement rate
  */
 export function estimateAVDTier(video: Video): 'High' | 'Medium' | 'Low' {
-    const hoursOld = (Date.now() - new Date(video.publishedAt).getTime()) / (1000 * 60 * 60);
-    const viewVelocity = video.views / Math.max(hoursOld, 1);
+    const hoursOld = Math.max(
+        (Date.now() - new Date(video.publishedAt).getTime()) / (1000 * 60 * 60),
+        1 // Minimum 1 hour to prevent inflation
+    );
+    const viewVelocity = video.views / hoursOld;
     const subscriberRatio = video.views / Math.max(video.subscriberCount, 100);
 
-    // High tier: Fast growth + overperformance
-    if (viewVelocity > 1000 && subscriberRatio > 5) {
+    // Adjusted thresholds for 1+ hour minimum
+    if (viewVelocity > 500 && subscriberRatio > 3) {
         return 'High';
     }
 
-    // Medium tier: Decent growth or strong engagement
-    if (viewVelocity > 100 || subscriberRatio > 2) {
+    if (viewVelocity > 50 || subscriberRatio > 1.5) {
         return 'Medium';
     }
 
@@ -119,5 +121,5 @@ export function enrichVideo(videoData: Omit<Video, 'viralScore' | 'engagementRat
 export function rankVideos(videos: Video[]): Video[] {
     return [...videos].sort((a, b) => b.viralScore - a.viralScore);
 }
- 
- 
+
+

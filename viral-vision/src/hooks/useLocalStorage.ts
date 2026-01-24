@@ -20,15 +20,27 @@ export function useLocalStorage() {
             if (stored) {
                 const parsed = JSON.parse(stored);
                 // Convert ISO strings back to Date objects
-                parsed.savedIdeas = parsed.savedIdeas.map((idea: any) => ({
-                    ...idea,
-                    savedAt: new Date(idea.savedAt),
-                    video: {
-                        ...idea.video,
-                        publishedAt: new Date(idea.video.publishedAt),
-                        fetchedAt: new Date(idea.video.fetchedAt),
-                    },
-                }));
+                parsed.savedIdeas = parsed.savedIdeas
+                    .map((idea: any) => {
+                        try {
+                            return {
+                                ...idea,
+                                savedAt: idea.savedAt ? new Date(idea.savedAt) : new Date(),
+                                video: {
+                                    ...idea.video,
+                                    publishedAt: idea.video.publishedAt
+                                        ? new Date(idea.video.publishedAt)
+                                        : new Date(),
+                                    fetchedAt: idea.video.fetchedAt
+                                        ? new Date(idea.video.fetchedAt)
+                                        : new Date(),
+                                },
+                            };
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter(Boolean);
                 setPreferences(parsed);
             }
         } catch (error) {
@@ -58,34 +70,39 @@ export function useLocalStorage() {
     };
 
     const saveIdea = (newIdea: SavedIdea): { success: boolean; message?: string } => {
-        let savedIdeas = [...preferences.savedIdeas];
+        let result: { success: boolean; message?: string } = { success: false };
 
-        // Check if already saved
-        if (savedIdeas.some(idea => idea.video.id === newIdea.video.id)) {
-            return { success: false, message: 'This video is already saved' };
-        }
+        setPreferences(prev => {
+            let savedIdeas = [...prev.savedIdeas];
 
-        // Auto-delete oldest if at max capacity
-        if (savedIdeas.length >= MAX_SAVED_IDEAS) {
-            savedIdeas.shift(); // Remove oldest
-            const result = savePreferences({ ...preferences, savedIdeas: [...savedIdeas, newIdea] });
-            if (result === 'SUCCESS') {
-                return { success: true, message: `Oldest idea removed to make room (max ${MAX_SAVED_IDEAS} saved)` };
-            } else if (result === 'QUOTA_EXCEEDED') {
-                return { success: false, message: 'Storage full. Please clear some saved ideas.' };
+            if (savedIdeas.some(idea => idea.video.id === newIdea.video.id)) {
+                result = { success: false, message: 'This video is already saved' };
+                return prev;
             }
-            return { success: false, message: 'Failed to save idea' };
-        }
 
-        savedIdeas.push(newIdea);
-        const result = savePreferences({ ...preferences, savedIdeas });
+            if (savedIdeas.length >= MAX_SAVED_IDEAS) {
+                savedIdeas.shift();
+                result = { success: true, message: `Oldest idea removed (max ${MAX_SAVED_IDEAS})` };
+            } else {
+                result = { success: true };
+            }
 
-        if (result === 'SUCCESS') {
-            return { success: true };
-        } else if (result === 'QUOTA_EXCEEDED') {
-            return { success: false, message: 'Storage full. Please clear some saved ideas.' };
-        }
-        return { success: false, message: 'Failed to save idea' };
+            savedIdeas.push(newIdea);
+            const newPreferences = { ...prev, savedIdeas };
+
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
+            } catch (error) {
+                if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+                    result = { success: false, message: 'Storage full' };
+                    return prev;
+                }
+            }
+
+            return newPreferences;
+        });
+
+        return result;
     };
 
     const removeIdea = (videoId: string) => {
@@ -118,4 +135,4 @@ export function useLocalStorage() {
     };
 }
 
- 
+

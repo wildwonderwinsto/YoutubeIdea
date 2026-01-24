@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Video } from '@/types/video';
 import { Card, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
@@ -35,6 +36,7 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
 
     const thumbnailUrl = `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`;
     const youtubeUrl = `https://www.youtube.com/watch?v=${video.id}`;
+    const [isDownloading, setIsDownloading] = useState(false);
 
     return (
         <Card className="group relative overflow-hidden border-white/10 bg-gradient-to-br from-gray-900/50 to-gray-800/30 backdrop-blur-sm transition-all hover:border-red-500/50 hover:shadow-lg hover:shadow-red-500/20">
@@ -129,14 +131,35 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                     <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
-                        onClick={() => {
-                            navigator.clipboard.writeText(youtubeUrl);
-                            window.open('https://cobalt.tools', '_blank');
-                            toast({
-                                title: "Link copied!",
-                                description: "Paste it in the downloader we just opened for you.",
-                            });
+                        disabled={isDownloading}
+                        className="flex-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 disabled:opacity-50"
+                        onClick={async () => {
+                            if (isDownloading) return;
+                            setIsDownloading(true);
+
+                            try {
+                                await navigator.clipboard.writeText(youtubeUrl);
+                                window.open('https://cobalt.tools', '_blank');
+                                toast({
+                                    title: "Link copied!",
+                                    description: "Paste it in the downloader we just opened for you.",
+                                });
+                            } catch (error) {
+                                // Fallback for browsers without clipboard API
+                                const textarea = document.createElement('textarea');
+                                textarea.value = youtubeUrl;
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textarea);
+
+                                toast({
+                                    title: "Link copied!",
+                                    description: "Paste it in the downloader we just opened for you.",
+                                });
+                            } finally {
+                                setTimeout(() => setIsDownloading(false), 2000);
+                            }
                         }}
                     >
                         <Download className="mr-1 h-3 w-3" />
@@ -174,4 +197,4 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
     );
 }
 
- 
+
