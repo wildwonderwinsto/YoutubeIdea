@@ -1,5 +1,6 @@
 import { Video } from '@/types/video';
 import { getGeminiApiKey } from './api-config';
+import { logger } from './logger';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash';
 
@@ -56,7 +57,7 @@ async function callGeminiAPI(prompt: string, enableSearch: boolean = false): Pro
         const data: GeminiResponse = await response.json();
         return data.candidates[0].content.parts[0].text.trim();
     } catch (error) {
-        console.error('Gemini API error:', error);
+        logger.error('Gemini API error:', error);
         throw error;
     }
 }
@@ -107,7 +108,7 @@ Keep it under 40 words. Be specific and actionable.`;
         const idea = await callGeminiAPI(prompt, false);
         return idea;
     } catch (error) {
-        console.warn('Could not generate video idea:', error);
+        logger.warn('Could not generate video idea:', error);
         return 'Create content similar to the top-ranked videos, focusing on recent trends and high-engagement topics in your niche.';
     }
 }
@@ -136,7 +137,7 @@ Format:
         const explanation = await callGeminiAPI(prompt, false);
         return explanation;
     } catch (error) {
-        console.warn('Could not generate explanation:', error);
+        logger.warn('Could not generate explanation:', error);
         return `• High engagement rate (${(video.engagementRate * 100).toFixed(1)}%)\n• Posted recently (${hoursAgo}h ago)\n• Strong viral score (${video.viralScore.toFixed(0)}/100)`;
     }
 }

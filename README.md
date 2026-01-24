@@ -26,9 +26,7 @@ Find your next viral video idea by discovering trending content from small chann
 
 ### 1. Install Dependencies
 
-
 ```bash
-cd viral-vision
 npm install
 ```
 
@@ -59,6 +57,7 @@ Edit `.env` and add your keys:
 ```env
 VITE_YOUTUBE_API_KEY=your_youtube_api_key_here
 VITE_GEMINI_API_KEY=your_gemini_api_key_here
+VITE_DOWNLOAD_SERVER_URL=http://localhost:3000  # Optional: Download server URL (defaults to localhost:3000)
 ```
 
 ### 4. Run Servers
@@ -67,14 +66,13 @@ You need to run both the backend (for downloads) and frontend (for UI).
 
 **Terminal 1 (Backend):**
 ```bash
-cd viral-vision/server
+cd server
 npm install
 npm start
 ```
 
 **Terminal 2 (Frontend):**
 ```bash
-cd viral-vision
 npm run dev
 ```
 
@@ -96,7 +94,10 @@ npm run preview  # Preview production build locally
 3. Add environment variables in Vercel dashboard:
    - `VITE_YOUTUBE_API_KEY`
    - `VITE_GEMINI_API_KEY`
+   - `VITE_DOWNLOAD_SERVER_URL` (optional, if using download feature)
 4. Deploy
+
+**Note:** The download server feature requires a separate backend deployment. For production, deploy the `server` folder separately or disable the download feature.
 
 ## Usage
 

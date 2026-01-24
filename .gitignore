@@ -13,6 +13,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -23,3 +28,13 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+models.txt
+check-models.ts

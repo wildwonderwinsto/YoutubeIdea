@@ -11,6 +11,7 @@ import { rankVideos } from './lib/viral-score';
 import { generateNextVideoIdea, inferNicheFromMetadata, checkContentSafety } from './lib/gemini-api';
 import { Loader2 } from 'lucide-react';
 import { SearchFilters, DEFAULT_FILTERS } from './types/filters';
+import { logger } from './lib/logger';
 
 type AppState = 'landing' | 'dashboard' | 'error';
 
@@ -71,15 +72,16 @@ function App() {
                 const idea = await generateNextVideoIdea(rankedVideos);
                 setNextVideoIdea(idea);
             } catch (error) {
-                console.warn('Failed to generate video idea:', error);
+                logger.warn('Failed to generate video idea:', error);
                 setNextVideoIdea('Create content similar to the top-ranked videos, focusing on recent trends and high-engagement topics in your niche.');
             }
 
             setAppState('dashboard');
-        } catch (error: any) {
-            console.error('Search error:', error);
+        } catch (error) {
+            logger.error('Search error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-            if (error.message === 'QUOTA_EXCEEDED' || error.message === 'RATE_LIMIT') {
+            if (errorMessage === 'QUOTA_EXCEEDED' || errorMessage === 'RATE_LIMIT') {
                 toast({
                     title: 'API Limit Reached',
                     description: 'The shared API key has exceeded its daily quota. Please click the Settings gear icon to add your own API key.',
@@ -95,7 +97,7 @@ function App() {
             } else {
                 toast({
                     title: 'Search failed',
-                    description: error.message || 'Could not fetch trending videos. Please check your API key and try again.',
+                    description: errorMessage || 'Could not fetch trending videos. Please check your API key and try again.',
                     variant: 'destructive',
                 });
             }
@@ -150,17 +152,18 @@ function App() {
 
                 // Continue with regular search
                 await handleSearch(inferredNiche);
-            } catch (error: any) {
-                console.error('Niche inference failed:', error);
+            } catch (error) {
+                logger.error('Niche inference failed:', error);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 toast({
                     title: 'Could not infer niche',
-                    description: error.message || 'Please enter your niche manually.',
+                    description: errorMessage || 'Please enter your niche manually.',
                     variant: 'destructive',
                 });
                 setIsLoading(false);
             }
         } catch (error) {
-            console.error('Channel analysis error:', error);
+            logger.error('Channel analysis error:', error);
             toast({
                 title: 'Analysis failed',
                 description: 'Could not analyze this channel. Please try again or enter your niche manually.',

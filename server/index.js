@@ -4,7 +4,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const isDevelopment = process.env.NODE_ENV !== 'production';
 
 app.use(cors());
 app.use(express.json());
@@ -26,15 +27,20 @@ app.get('/download', async (req, res) => {
         return res.status(400).json({ error: 'Missing video URL' });
     }
 
-    console.log(`📥 Download request: ${videoUrl}`);
+    if (isDevelopment) {
+        console.log(`📥 Download request: ${videoUrl}`);
+    }
 
     // Set headers for file download
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
 
     // Use local binary from youtube-dl-exec package to avoid global install requirement
+    // Note: This assumes Windows. For production, you may need to handle different platforms
     const ytDlpPath = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
-    console.log(`Using yt-dlp binary at: ${ytDlpPath}`);
+    if (isDevelopment) {
+        console.log(`Using yt-dlp binary at: ${ytDlpPath}`);
+    }
 
     const ytDlp = spawn(ytDlpPath, [
         '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -65,7 +71,7 @@ app.get('/download', async (req, res) => {
                     // ignore
                 }
             }
-        } else {
+        } else if (isDevelopment) {
             console.log('✅ Download complete');
         }
     });
@@ -73,10 +79,14 @@ app.get('/download', async (req, res) => {
     // Handle client disconnect
     req.on('close', () => {
         ytDlp.kill();
-        console.log('🚫 Client disconnected, killed yt-dlp process');
+        if (isDevelopment) {
+            console.log('🚫 Client disconnected, killed yt-dlp process');
+        }
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    if (isDevelopment) {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+    }
 });

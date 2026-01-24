@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SavedIdea, UserPreferences } from '@/types/video';
+import { logger } from '@/lib/logger';
 
 const MAX_SAVED_IDEAS = 50;
 const STORAGE_KEY = 'viralvision_preferences';
@@ -45,7 +46,7 @@ export function useLocalStorage() {
                 .filter(Boolean);
             return parsed;
         } catch (error) {
-            console.error('Failed to parse preferences:', error);
+            logger.error('Failed to parse preferences:', error);
             return { lastNiche: '', savedIdeas: [] };
         }
     };
@@ -82,7 +83,7 @@ export function useLocalStorage() {
             setPreferences(newValue);
             return 'SUCCESS';
         } catch (error) {
-            console.error('Failed to save preferences to LocalStorage:', error);
+            logger.error('Failed to save preferences to LocalStorage:', error);
             if (error instanceof DOMException && error.name === 'QuotaExceededError') {
                 return 'QUOTA_EXCEEDED';
             }

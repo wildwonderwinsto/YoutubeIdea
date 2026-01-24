@@ -1,6 +1,7 @@
 import { Video } from '@/types/video';
 import { enrichVideo } from './viral-score';
 import { getYouTubeApiKey } from './api-config';
+import { logger } from './logger';
 
 const YOUTUBE_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
@@ -159,7 +160,7 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
 
         return videos;
     } catch (error) {
-        console.error('YouTube API error:', error);
+        logger.error('YouTube API error:', error);
         throw error;
     }
 }
@@ -223,7 +224,7 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             smallChannelBoost: 0,
         }));
     } catch (error) {
-        console.error('Error fetching channel videos:', error);
+        logger.error('Error fetching channel videos:', error);
         return [];
     }
 }
@@ -310,7 +311,7 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
             channelName: data.items[0].snippet.title,
         };
     } catch (error) {
-        console.error('Channel fetch error:', error);
+        logger.error('Channel fetch error:', error);
         return null;
     }
 }

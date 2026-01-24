@@ -12,6 +12,7 @@ import { generateWhyItWorksExplanation } from '@/lib/gemini-api';
 import { SearchFilters } from '@/types/filters';
 import { FilterDialog } from './FilterDialog';
 import { ApiKeySettings } from './ApiKeySettings';
+import { logger } from '@/lib/logger';
 
 interface DashboardProps {
     videos: Video[];
@@ -130,7 +131,7 @@ export function Dashboard({
                         }
                     } catch (error) {
                         if (!cancelled) {
-                            console.error(`Failed to load explanation for ${video.id}:`, error);
+                            logger.error(`Failed to load explanation for ${video.id}:`, error);
                             setExplanations(prev => ({ ...prev, [video.id]: "Analysis unavailable." }));
                         }
                     }

@@ -4,6 +4,7 @@ import { Card, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Trophy, ExternalLink, Bookmark, Download } from 'lucide-react';
 import { toast } from './ui/use-toast';
+import { logger } from '@/lib/logger';
 
 interface VideoCardProps {
     video: Video;
@@ -138,8 +139,9 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                             setIsDownloading(true);
 
                             try {
-                                // Option 1: Direct download approach
-                                const downloadUrl = `http://localhost:3000/download?url=${encodeURIComponent(youtubeUrl)}`;
+                                // Get download server URL from environment or default to localhost for dev
+                                const downloadServerUrl = import.meta.env.VITE_DOWNLOAD_SERVER_URL || 'http://localhost:3000';
+                                const downloadUrl = `${downloadServerUrl}/download?url=${encodeURIComponent(youtubeUrl)}`;
 
                                 // Create a temporary link and trigger download
                                 const a = document.createElement('a');
@@ -159,7 +161,7 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                                     description: "Your video is downloading...",
                                 });
                             } catch (error) {
-                                console.error('Download error:', error);
+                                logger.error('Download error:', error);
                                 toast({
                                     title: "Download failed",
                                     description: "Make sure the backend server is running on port 3000.",
