@@ -25,7 +25,7 @@ Find your next viral video idea by discovering trending content from small chann
 ## Setup Instructions
 
 ### 1. Install Dependencies
-
+a
 ```bash
 cd viral-vision
 npm install
