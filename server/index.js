@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,7 +21,7 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'viral-vision-downloader' });
 });
 
-// Download endpoint
+// Download endpoint - uses temp file approach for reliable video+audio merging
 app.get('/download', async (req, res) => {
     const videoUrl = req.query.url;
     const filename = req.query.filename || 'video';
@@ -47,6 +49,15 @@ app.get('/download', async (req, res) => {
 
     if (isDevelopment) {
         console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
+        
+        // Check if ffmpeg is available (needed for merging video+audio)
+        const { execSync } = require('child_process');
+        try {
+            execSync('ffmpeg -version', { stdio: 'ignore' });
+            console.log('✅ ffmpeg is available for video+audio merging');
+        } catch (e) {
+            console.warn('⚠️ WARNING: ffmpeg not found! Video+audio merging may fail. Install ffmpeg for proper downloads.');
+        }
     }
 
     // Sanitize filename for use in Content-Disposition header
@@ -56,94 +67,248 @@ app.get('/download', async (req, res) => {
         .toLowerCase() || 'video';
     const finalFilename = `${sanitizedFilename}.mp4`;
 
-    // Set headers for file download
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="${finalFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
+    // Create temp file path
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, `viralvision_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`);
 
-    // Use format that prioritizes already-merged formats first
-    // Format priority: 
-    // 1. Best merged format (mp4/webm with video+audio)
-    // 2. Best video+audio that can be merged
-    // 3. Best single format
-    // Note: When using stdout (-o -), yt-dlp can merge if ffmpeg is available
-    const ytDlp = spawn(ytDlpBinary, [
-        '-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best',
-        '--merge-output-format', 'mp4',
-        '--no-warnings',
-        '--no-check-certificate',
-        '--no-playlist',
-        '--prefer-free-formats',
-        '-o', '-', // Output to stdout
-        videoUrl
-    ]);
+    try {
+        // Download to temp file with proper format selection
+        // Format priority: 
+        // 1. Progressive formats (already have video+audio merged) - preferred
+        // 2. bestvideo+bestaudio (will be merged with ffmpeg)
+        // This ensures we get audio even if merge fails
+        // Format selector: Prioritize formats with both video AND audio
+        // Strategy: Use bestvideo+bestaudio which ensures we get both streams
+        // yt-dlp will merge them automatically if ffmpeg is available
+        // Fallback to best if merge fails (but best might be video-only, so not ideal)
+        const ytDlp = spawn(ytDlpBinary, [
+            '-f', 'bestvideo+bestaudio/best',
+            '--merge-output-format', 'mp4',
+            '--no-check-certificate',
+            '--no-playlist',
+            '--prefer-free-formats',
+            '--no-mtime', // Don't set file modification time
+            '--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy', // Copy streams without re-encoding (faster)
+            '-o', tempFilePath, // Output to temp file
+            videoUrl
+        ]);
 
-    // Handle errors before piping
-    let hasError = false;
-    let errorMessage = '';
+        let hasError = false;
+        let errorMessage = '';
 
-    // Collect stderr for error messages
-    ytDlp.stderr.on('data', (data) => {
-        const errorText = data.toString();
-        if (isDevelopment) {
-            console.error(`yt-dlp stderr: ${errorText}`);
-        }
-        // Check for actual errors (not just warnings)
-        if (errorText.toLowerCase().includes('error') || 
-            errorText.toLowerCase().includes('unable') ||
-            errorText.toLowerCase().includes('failed')) {
-            hasError = true;
-            errorMessage += errorText;
-        }
-    });
-
-    // Pipe stdout to response
-    ytDlp.stdout.pipe(res);
-
-    // Handle stdout errors (yt-dlp sometimes outputs errors to stdout)
-    ytDlp.stdout.on('error', (error) => {
-        if (isDevelopment) {
-            console.error('yt-dlp stdout error:', error);
-        }
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Download stream error', details: error.message });
-        }
-    });
-
-    // Handle process exit
-    ytDlp.on('close', (code) => {
-        if (code !== 0 || hasError) {
+        // Collect stderr for error messages and format info
+        ytDlp.stderr.on('data', (data) => {
+            const errorText = data.toString();
             if (isDevelopment) {
-                console.error(`❌ yt-dlp exited with code ${code}${hasError ? ' (with errors)' : ''}`);
-                if (errorMessage) {
-                    console.error('Error details:', errorMessage);
+                // Log all stderr output to see what format is being selected
+                console.log(`yt-dlp: ${errorText}`);
+            }
+            
+            // Check for empty file error specifically
+            if (errorText.toLowerCase().includes('downloaded file is empty') ||
+                errorText.toLowerCase().includes('file is empty')) {
+                hasError = true;
+                errorMessage += 'Downloaded file is empty. This usually means no format matched the selector. ';
+            }
+            
+            // Check for empty file error specifically (this is a critical error)
+            if (errorText.toLowerCase().includes('downloaded file is empty') ||
+                errorText.toLowerCase().includes('file is empty')) {
+                hasError = true;
+                errorMessage += 'Downloaded file is empty. Format selector may be too restrictive. ';
+            }
+            
+            // Check for actual errors (not just warnings)
+            if (errorText.toLowerCase().includes('error') || 
+                errorText.toLowerCase().includes('unable') ||
+                errorText.toLowerCase().includes('failed') ||
+                errorText.toLowerCase().includes('unavailable')) {
+                hasError = true;
+                errorMessage += errorText;
+            }
+            
+            // Log format and merge information
+            if (errorText.toLowerCase().includes('merging formats') ||
+                errorText.toLowerCase().includes('ffmpeg') ||
+                errorText.toLowerCase().includes('postprocessor') ||
+                errorText.toLowerCase().includes('deleting original file')) {
+                // These are info messages about the merge process
+                if (isDevelopment) {
+                    console.log(`ℹ️ ${errorText.trim()}`);
                 }
+            }
+            
+            // Check for merge failures
+            if (errorText.toLowerCase().includes('error merging') ||
+                errorText.toLowerCase().includes('merge failed') ||
+                errorText.toLowerCase().includes('ffmpeg not found') ||
+                errorText.toLowerCase().includes('ffmpeg is not installed')) {
+                hasError = true;
+                errorMessage += `Merge error: ${errorText}. Make sure ffmpeg is installed and in PATH. `;
+            }
+            
+            // Check if it's downloading video-only (no audio)
+            if (errorText.toLowerCase().includes('video only') || 
+                errorText.toLowerCase().includes('only video')) {
+                if (isDevelopment) {
+                    console.warn(`⚠️ Warning: Video-only format detected. Audio may be missing.`);
+                }
+            }
+        });
+
+        // Wait for download to complete
+        await new Promise((resolve, reject) => {
+            ytDlp.on('close', (code) => {
+                if (code !== 0 || hasError) {
+                    // Clean up temp file on error
+                    if (fs.existsSync(tempFilePath)) {
+                        try {
+                            fs.unlinkSync(tempFilePath);
+                        } catch (e) {
+                            // Ignore cleanup errors
+                        }
+                    }
+                    reject(new Error(errorMessage || `yt-dlp exited with code ${code}`));
+                } else {
+                    resolve();
+                }
+            });
+
+            ytDlp.on('error', (error) => {
+                // Clean up temp file on error
+                if (fs.existsSync(tempFilePath)) {
+                    try {
+                        fs.unlinkSync(tempFilePath);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }
+                reject(error);
+            });
+
+            // Handle client disconnect during download
+            req.on('close', () => {
+                ytDlp.kill();
+                if (fs.existsSync(tempFilePath)) {
+                    try {
+                        fs.unlinkSync(tempFilePath);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }
+                if (isDevelopment) {
+                    console.log('🚫 Client disconnected during download');
+                }
+            });
+        });
+
+        // Check if file exists and has content
+        if (!fs.existsSync(tempFilePath)) {
+            throw new Error('Downloaded file not found');
+        }
+
+        const stats = fs.statSync(tempFilePath);
+        if (stats.size === 0) {
+            try {
+                fs.unlinkSync(tempFilePath);
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+            throw new Error('Downloaded file is empty');
+        }
+
+        // Basic validation: audio-only files are typically much smaller
+        // A 1-minute video at 1080p should be at least a few MB
+        // If file is suspiciously small, it might be audio-only
+        const fileSizeMB = stats.size / 1024 / 1024;
+        if (fileSizeMB < 1) { // Less than 1MB
+            if (isDevelopment) {
+                console.warn(`⚠️ Warning: Downloaded file is very small (${fileSizeMB.toFixed(2)}MB). This might be audio-only.`);
+                console.warn('⚠️ Make sure ffmpeg is installed and in PATH for video+audio merging.');
+            }
+            // Don't fail, but log warning - some short videos might legitimately be small
+        }
+
+        if (isDevelopment) {
+            console.log(`✅ Download complete: ${fileSizeMB.toFixed(2)}MB`);
+            console.log(`📁 File path: ${tempFilePath}`);
+        }
+
+        // Set headers for file download
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="${finalFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
+        res.setHeader('Content-Length', stats.size);
+
+        // Stream file to response
+        const fileStream = fs.createReadStream(tempFilePath);
+        
+        fileStream.on('error', (error) => {
+            if (isDevelopment) {
+                console.error('File stream error:', error);
             }
             if (!res.headersSent) {
-                try {
-                    res.status(500).json({ 
-                        error: 'Download failed', 
-                        details: errorMessage || `yt-dlp exited with code ${code}` 
-                    });
-                } catch (e) {
-                    // ignore - response may already be closed
-                }
-            } else {
-                // Headers already sent, can't send error response
-                // The stream will just end, which the client should handle
-                res.end();
+                res.status(500).json({ error: 'File stream error', details: error.message });
             }
-        } else if (isDevelopment) {
-            console.log('✅ Download complete');
-        }
-    });
+            // Clean up temp file
+            if (fs.existsSync(tempFilePath)) {
+                try {
+                    fs.unlinkSync(tempFilePath);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+        });
 
-    // Handle client disconnect
-    req.on('close', () => {
-        ytDlp.kill();
-        if (isDevelopment) {
-            console.log('🚫 Client disconnected, killed yt-dlp process');
+        fileStream.pipe(res);
+
+        // Clean up temp file after streaming completes
+        res.on('finish', () => {
+            if (fs.existsSync(tempFilePath)) {
+                try {
+                    fs.unlinkSync(tempFilePath);
+                    if (isDevelopment) {
+                        console.log('🧹 Cleaned up temp file');
+                    }
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+        });
+
+        res.on('close', () => {
+            if (fs.existsSync(tempFilePath)) {
+                try {
+                    fs.unlinkSync(tempFilePath);
+                    if (isDevelopment) {
+                        console.log('🧹 Cleaned up temp file (connection closed)');
+                    }
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+        });
+
+    } catch (error) {
+        // Clean up temp file on any error
+        if (fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+            } catch (e) {
+                // Ignore cleanup errors
+            }
         }
-    });
+
+        if (isDevelopment) {
+            console.error('❌ Download error:', error);
+        }
+
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Download failed', 
+                details: error.message || 'Unknown error occurred'
+            });
+        }
+    }
 });
 
 app.listen(PORT, () => {

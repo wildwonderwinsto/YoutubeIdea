@@ -99,6 +99,11 @@ npm run preview  # Preview production build locally
 
 **Note:** The download server feature requires a separate backend deployment. For production, deploy the `server` folder separately or disable the download feature.
 
+**Important:** The download server requires `ffmpeg` to be installed on the system for merging video and audio streams. Install it from [ffmpeg.org](https://ffmpeg.org/download.html) or via package manager:
+- Windows: `choco install ffmpeg` or download from website
+- macOS: `brew install ffmpeg`
+- Linux: `sudo apt-get install ffmpeg` (Ubuntu/Debian) or `sudo yum install ffmpeg` (RHEL/CentOS)
+
 ## Usage
 
 ### Search by Niche
