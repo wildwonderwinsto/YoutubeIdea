@@ -138,19 +138,21 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                             setIsDownloading(true);
 
                             try {
-                                const response = await fetch(`http://localhost:3000/download?url=${encodeURIComponent(youtubeUrl)}`);
+                                // Option 1: Direct download approach
+                                const downloadUrl = `http://localhost:3000/download?url=${encodeURIComponent(youtubeUrl)}`;
 
-                                if (!response.ok) throw new Error('Download failed');
-
-                                const blob = await response.blob();
-                                const url = window.URL.createObjectURL(blob);
+                                // Create a temporary link and trigger download
                                 const a = document.createElement('a');
-                                a.href = url;
+                                a.href = downloadUrl;
                                 a.download = `${video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+                                a.style.display = 'none';
                                 document.body.appendChild(a);
                                 a.click();
-                                window.URL.revokeObjectURL(url);
-                                document.body.removeChild(a);
+
+                                // Cleanup
+                                setTimeout(() => {
+                                    document.body.removeChild(a);
+                                }, 100);
 
                                 toast({
                                     title: "Download started!",
@@ -164,7 +166,7 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                                     variant: "destructive"
                                 });
                             } finally {
-                                setIsDownloading(false);
+                                setTimeout(() => setIsDownloading(false), 2000);
                             }
                         }}
                     >

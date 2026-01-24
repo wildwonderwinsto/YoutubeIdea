@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { exec } = require('youtube-dl-exec');
+const { spawn } = require('child_process');
 const path = require('path');
 
 const app = express();
@@ -26,53 +26,57 @@ app.get('/download', async (req, res) => {
         return res.status(400).json({ error: 'Missing video URL' });
     }
 
-    console.log(`Received download request for: ${videoUrl}`);
+    console.log(`📥 Download request: ${videoUrl}`);
 
-    try {
-        // Just get the info first to get the title
-        // We use a promise here to get metadata
-        // Note: exec returns a promise that resolves with the output
+    // Set headers for file download
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
 
-        // This is a direct stream pipe. 
-        // We set headers for attachment.
-        res.header('Content-Disposition', 'attachment; filename="video.mp4"');
-        res.header('Content-Type', 'video/mp4');
+    // Use local binary from youtube-dl-exec package to avoid global install requirement
+    const ytDlpPath = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
+    console.log(`Using yt-dlp binary at: ${ytDlpPath}`);
 
-        // Execute yt-dlp to stream data to stdout
-        // We use the 'exec' function from youtube-dl-exec which spawns the process
-        // streaming stdout to our response
+    const ytDlp = spawn(ytDlpPath, [
+        '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        '--no-warnings',
+        '--no-check-certificate',
+        '-o', '-', // Output to stdout
+        videoUrl
+    ]);
 
-        // Execute yt-dlp to stream data to stdout
-        // We use the 'exec' function from youtube-dl-exec which spawns the process
-        // streaming stdout to our response
+    // Pipe stdout to response
+    ytDlp.stdout.pipe(res);
 
-        const subprocess = exec(videoUrl, {
-            output: '-',
-            format: 'best[ext=mp4]/best', // Force single file to avoid ffmpeg merge requirement
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-        }, { stdio: ['ignore', 'pipe', 'pipe'] }); // Capture stderr for debugging
+    // Log errors
+    ytDlp.stderr.on('data', (data) => {
+        console.error(`yt-dlp: ${data.toString()}`);
+    });
 
-        // Pipe the subprocess stdout to the response
-        subprocess.stdout.pipe(res);
-
-        subprocess.stdout.on('end', () => {
-            console.log('Download stream ended');
-        });
-
-        subprocess.stderr?.on('data', (data) => {
-            console.error(`yt-dlp stderr: ${data}`);
-        });
-
-    } catch (error) {
-        console.error('Download error:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Download failed', details: error.message });
+    // Handle process exit
+    ytDlp.on('close', (code) => {
+        if (code !== 0) {
+            console.error(`❌ yt-dlp exited with code ${code}`);
+            if (!res.headersSent) {
+                // If the stream hasn't started, we can send a 500.
+                // If it has, the connection will just close, which is expected.
+                try {
+                    res.status(500).json({ error: 'Download failed' });
+                } catch (e) {
+                    // ignore
+                }
+            }
+        } else {
+            console.log('✅ Download complete');
         }
-    }
+    });
+
+    // Handle client disconnect
+    req.on('close', () => {
+        ytDlp.kill();
+        console.log('🚫 Client disconnected, killed yt-dlp process');
+    });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
