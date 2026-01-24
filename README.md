@@ -33,6 +33,7 @@ npm install
 ### 2. Get API Keys
 
 #### YouTube Data API v3
+
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
 3. Enable "YouTube Data API v3"
@@ -40,6 +41,7 @@ npm install
 5. Copy the API key
 
 #### Google Gemini API
+
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create an API key
 3. Copy the API key
@@ -65,6 +67,7 @@ VITE_DOWNLOAD_SERVER_URL=http://localhost:3000  # Optional: Download server URL 
 You need to run both the backend (for downloads) and frontend (for UI).
 
 **Terminal 1 (Backend):**
+
 ```bash
 cd server
 npm install
@@ -72,6 +75,7 @@ npm start
 ```
 
 **Terminal 2 (Frontend):**
+
 ```bash
 npm run dev
 ```
@@ -100,6 +104,7 @@ npm run preview  # Preview production build locally
 **Note:** The download server feature requires a separate backend deployment. For production, deploy the `server` folder separately or disable the download feature.
 
 **Important:** The download server requires `ffmpeg` to be installed on the system for merging video and audio streams. Install it from [ffmpeg.org](https://ffmpeg.org/download.html) or via package manager:
+
 - Windows: `choco install ffmpeg` or download from website
 - macOS: `brew install ffmpeg`
 - Linux: `sudo apt-get install ffmpeg` (Ubuntu/Debian) or `sudo yum install ffmpeg` (RHEL/CentOS)
@@ -107,16 +112,19 @@ npm run preview  # Preview production build locally
 ## Usage
 
 ### Search by Niche
+
 1. Enter a niche keyword (e.g., "Fortnite montages")
 2. Click "Analyze Trends"
 3. Browse the ranked videos and insights
 
 ### Channel URL Analysis
+
 1. Paste your YouTube channel URL
 2. The app will automatically detect your niche
 3. Get personalized trending recommendations
 
 ### Saving Ideas
+
 - Click "Save" on any video card
 - Access saved ideas via the "Saved Ideas" button in the header
 - Limit: 50 saved ideas (auto-deletes oldest when full)
@@ -124,23 +132,28 @@ npm run preview  # Preview production build locally
 ## Important Notes
 
 ### Content Safety
+
 The app blocks analysis of:
+
 - NSFW/adult content
 - Hate speech or extremist content
 - Dangerous challenges
 - Medical or financial "get rich quick" schemes
 
 ### Data Accuracy
+
 - **AVD Tiers** are AI estimates based on public signals (not official YouTube data)
 - **Swipe rate/completion rate** is estimated from view velocity and engagement
 - Always verify data and add your own creative spin to recommendations
 
 ### API Quotas
+
 - **YouTube API**: 10,000 units/day (free tier)
 - **Gemini API**: Current free tier limits
 - The app caches results to minimize API usage
 
 ### Privacy
+
 - Saved ideas are stored **locally in your browser only**
 - Data may be lost if you clear browser storage
 - No server-side storage or user accounts in V1
@@ -148,18 +161,22 @@ The app blocks analysis of:
 ## Troubleshooting
 
 ### "YouTube API key not configured"
+
 - Make sure your `.env` file exists and contains `VITE_YOUTUBE_API_KEY`
 - Restart the dev server after adding environment variables
 
 ### "Daily limit reached"
+
 - You've hit the YouTube API quota (10,000 units/day)
 - Wait 24 hours or implement result caching
 
 ### "Channel not found"
+
 - The channel may be private or have no public videos
 - Try entering your niche manually instead
 
 ### No videos showing
+
 - The niche may be too specific—try a broader keyword
 - Click example niches to test the app functionality
 
@@ -170,6 +187,7 @@ MIT License - feel free to use for personal or commercial projects.
 ## Credits
 
 Built with:
+
 - [React](https://react.dev/)
 - [shadcn-ui](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
