@@ -23,3 +23,4 @@ export const DEFAULT_FILTERS: SearchFilters = {
     minViews: 'ALL',
 };
  
+ 
