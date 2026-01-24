@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Video } from '@/types/video';
 import { Card, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
-import { Trophy, ExternalLink, Bookmark, Download, Terminal } from 'lucide-react';
+import { Trophy, ExternalLink, Bookmark, Download } from 'lucide-react';
 import { toast } from './ui/use-toast';
 
 interface VideoCardProps {
@@ -138,48 +138,40 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                             setIsDownloading(true);
 
                             try {
-                                await navigator.clipboard.writeText(youtubeUrl);
-                                window.open('https://cobalt.tools', '_blank');
-                                toast({
-                                    title: "Link copied!",
-                                    description: "Paste it in the downloader we just opened for you.",
-                                });
-                            } catch (error) {
-                                // Fallback for browsers without clipboard API
-                                const textarea = document.createElement('textarea');
-                                textarea.value = youtubeUrl;
-                                document.body.appendChild(textarea);
-                                textarea.select();
-                                document.execCommand('copy');
-                                document.body.removeChild(textarea);
+                                const response = await fetch(`http://localhost:3000/download?url=${encodeURIComponent(youtubeUrl)}`);
+
+                                if (!response.ok) throw new Error('Download failed');
+
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${video.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
 
                                 toast({
-                                    title: "Link copied!",
-                                    description: "Paste it in the downloader we just opened for you.",
+                                    title: "Download started!",
+                                    description: "Your video is downloading...",
+                                });
+                            } catch (error) {
+                                console.error('Download error:', error);
+                                toast({
+                                    title: "Download failed",
+                                    description: "Make sure the backend server is running on port 3000.",
+                                    variant: "destructive"
                                 });
                             } finally {
-                                setTimeout(() => setIsDownloading(false), 2000);
+                                setIsDownloading(false);
                             }
                         }}
                     >
                         <Download className="mr-1 h-3 w-3" />
-                        Download
+                        {isDownloading ? 'Downloading...' : 'Download'}
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="w-9 border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
-                        onClick={() => {
-                            navigator.clipboard.writeText(`yt-dlp "${youtubeUrl}"`);
-                            toast({
-                                title: "Command copied!",
-                                description: "Run this in your terminal to download with yt-dlp.",
-                            });
-                        }}
-                        title="Copy yt-dlp command"
-                    >
-                        <Terminal className="h-3 w-3" />
-                    </Button>
+
                 </div>
                 {onSave && (
                     <Button

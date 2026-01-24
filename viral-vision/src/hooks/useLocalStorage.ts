@@ -14,65 +14,90 @@ export function useLocalStorage() {
     });
 
     // Load from LocalStorage on mount
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                // Convert ISO strings back to Date objects
-                parsed.savedIdeas = parsed.savedIdeas
-                    .map((idea: any) => {
-                        try {
-                            return {
-                                ...idea,
-                                savedAt: idea.savedAt ? new Date(idea.savedAt) : new Date(),
-                                video: {
-                                    ...idea.video,
-                                    publishedAt: idea.video.publishedAt
-                                        ? new Date(idea.video.publishedAt)
-                                        : new Date(),
-                                    fetchedAt: idea.video.fetchedAt
-                                        ? new Date(idea.video.fetchedAt)
-                                        : new Date(),
-                                },
-                            };
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter(Boolean);
-                setPreferences(parsed);
-            }
-        } catch (error) {
-            console.error('Failed to load preferences from LocalStorage:', error);
+    // Helper to safely parse stored data
+    const parsePreferences = (stored: string | null): UserPreferences => {
+        if (!stored) {
+            return { lastNiche: '', savedIdeas: [] };
         }
+        try {
+            const parsed = JSON.parse(stored);
+            // Convert ISO strings back to Date objects
+            parsed.savedIdeas = (parsed.savedIdeas || [])
+                .map((idea: any) => {
+                    try {
+                        return {
+                            ...idea,
+                            savedAt: idea.savedAt ? new Date(idea.savedAt) : new Date(),
+                            video: {
+                                ...idea.video,
+                                publishedAt: idea.video.publishedAt
+                                    ? new Date(idea.video.publishedAt)
+                                    : new Date(),
+                                fetchedAt: idea.video.fetchedAt
+                                    ? new Date(idea.video.fetchedAt)
+                                    : new Date(),
+                            },
+                        };
+                    } catch {
+                        return null;
+                    }
+                })
+                .filter(Boolean);
+            return parsed;
+        } catch (error) {
+            console.error('Failed to parse preferences:', error);
+            return { lastNiche: '', savedIdeas: [] };
+        }
+    };
+
+    // Load from LocalStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        setPreferences(parsePreferences(stored));
+
+        // Listen for changes from other components/tabs
+        const handleStorageChange = () => {
+            const fresh = localStorage.getItem(STORAGE_KEY);
+            setPreferences(parsePreferences(fresh));
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
-    // Save to LocalStorage whenever preferences change
-    const savePreferences = (newPreferences: UserPreferences) => {
+    // Safe read-modify-write operation
+    const modifyPreferences = (updater: (current: UserPreferences) => UserPreferences): string => {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
-            setPreferences(newPreferences);
+            // 1. Read latest from disk to avoid stale state
+            const stored = localStorage.getItem(STORAGE_KEY);
+            const current = parsePreferences(stored);
+
+            // 2. Apply update
+            const newValue = updater(current);
+
+            // 3. Write back
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newValue));
+
+            // 4. Update local state
+            setPreferences(newValue);
+            return 'SUCCESS';
         } catch (error) {
             console.error('Failed to save preferences to LocalStorage:', error);
-            // Check if quota exceeded
             if (error instanceof DOMException && error.name === 'QuotaExceededError') {
                 return 'QUOTA_EXCEEDED';
             }
             return 'ERROR';
         }
-        return 'SUCCESS';
     };
 
     const updateLastNiche = (niche: string) => {
-        const newPreferences = { ...preferences, lastNiche: niche };
-        savePreferences(newPreferences);
+        modifyPreferences(prev => ({ ...prev, lastNiche: niche }));
     };
 
     const saveIdea = (newIdea: SavedIdea): { success: boolean; message?: string } => {
         let result: { success: boolean; message?: string } = { success: false };
 
-        setPreferences(prev => {
+        modifyPreferences(prev => {
             let savedIdeas = [...prev.savedIdeas];
 
             if (savedIdeas.some(idea => idea.video.id === newIdea.video.id)) {
@@ -88,41 +113,31 @@ export function useLocalStorage() {
             }
 
             savedIdeas.push(newIdea);
-            const newPreferences = { ...prev, savedIdeas };
-
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
-            } catch (error) {
-                if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-                    result = { success: false, message: 'Storage full' };
-                    return prev;
-                }
-            }
-
-            return newPreferences;
+            return { ...prev, savedIdeas };
         });
 
         return result;
     };
 
     const removeIdea = (videoId: string) => {
-        const savedIdeas = preferences.savedIdeas.filter(idea => idea.video.id !== videoId);
-        savePreferences({ ...preferences, savedIdeas });
+        modifyPreferences(prev => ({
+            ...prev,
+            savedIdeas: prev.savedIdeas.filter(idea => idea.video.id !== videoId)
+        }));
     };
 
     const clearAllIdeas = () => {
-        savePreferences({ ...preferences, savedIdeas: [] });
+        modifyPreferences(prev => ({ ...prev, savedIdeas: [] }));
     };
 
     const updateApiKeys = (keys: { youtube?: string; gemini?: string }) => {
-        const newPreferences = {
-            ...preferences,
+        modifyPreferences(prev => ({
+            ...prev,
             apiKeys: {
-                ...preferences.apiKeys,
+                ...prev.apiKeys,
                 ...keys
             }
-        };
-        savePreferences(newPreferences);
+        }));
     };
 
     return {
