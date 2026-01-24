@@ -1,6 +1,6 @@
 import { Video } from '@/types/video';
+import { getGeminiApiKey } from './api-config';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash';
 
 interface GeminiResponse {
@@ -17,8 +17,9 @@ interface GeminiResponse {
  * Call Gemini API with a prompt
  */
 async function callGeminiAPI(prompt: string, enableSearch: boolean = false): Promise<string> {
-    if (!GEMINI_API_KEY) {
-        throw new Error('Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your .env file.');
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        throw new Error('Gemini API key not configured. Please set it in Settings or in your .env file.');
     }
 
     const requestBody: any = {
@@ -35,7 +36,7 @@ async function callGeminiAPI(prompt: string, enableSearch: boolean = false): Pro
 
     try {
         const response = await fetch(
-            `${GEMINI_BASE_URL}:generateContent?key=${GEMINI_API_KEY}`,
+            `${GEMINI_BASE_URL}:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -164,4 +165,4 @@ export async function checkContentSafety(niche: string): Promise<{ safe: boolean
 
     return { safe: true };
 }
- 
+

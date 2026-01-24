@@ -11,6 +11,7 @@ import { generateWhyItWorksExplanation } from '@/lib/gemini-api';
 
 import { SearchFilters } from '@/types/filters';
 import { FilterDialog } from './FilterDialog';
+import { ApiKeySettings } from './ApiKeySettings';
 
 interface DashboardProps {
     videos: Video[];
@@ -150,6 +151,7 @@ export function Dashboard({
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <ApiKeySettings />
                         <Dialog>
                             <DialogTrigger asChild>
                                 <Button
@@ -437,4 +439,4 @@ export function Dashboard({
         </div>
     );
 }
- 
+

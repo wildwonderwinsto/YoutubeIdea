@@ -10,6 +10,7 @@ type ToasterToast = {
     description?: React.ReactNode
     action?: React.ReactNode
     variant?: 'default' | 'destructive'
+    duration?: number
 }
 
 const actionTypes = {
@@ -200,4 +201,4 @@ export function Toaster() {
         </ToastProvider>
     )
 }
- 
+

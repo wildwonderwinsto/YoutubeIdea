@@ -1,7 +1,7 @@
 import { Video } from '@/types/video';
 import { enrichVideo } from './viral-score';
+import { getYouTubeApiKey } from './api-config';
 
-const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const YOUTUBE_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 // Wealthy regions to aggregate (US, UK, Canada, Australia, Germany)
@@ -25,8 +25,9 @@ function parseISO8601Duration(duration: string): number {
  * Fetch trending videos by niche/keyword aggregated from wealthy regions
  */
 export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d' | '30d' = '7d'): Promise<Video[]> {
-    if (!YOUTUBE_API_KEY) {
-        throw new Error('YouTube API key not configured. Please set VITE_YOUTUBE_API_KEY in your .env file.');
+    const apiKey = getYouTubeApiKey();
+    if (!apiKey) {
+        throw new Error('YouTube API key not configured. Please set it in Settings or in your .env file.');
     }
 
     // Calculate publishedAfter date based on filter
@@ -49,19 +50,18 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
                 `maxResults=15&` + // Fetch fewer per region to keep total manageable
                 `publishedAfter=${publishedAfter}&` +
                 `regionCode=${region}&` +
-                `key=${YOUTUBE_API_KEY}`
+                `key=${apiKey}`
             ).then(async res => {
                 if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    const errorMessage = errorData.error?.message || res.statusText || `Status ${res.status}`;
+
                     // Handle specific API errors like quota exceeded
-                    if (res.status === 403) {
-                        return res.json().then(errorData => {
-                            if (errorData.error?.message?.includes('quotaExceeded')) {
-                                throw new Error('QUOTA_EXCEEDED');
-                            }
-                            throw new Error(`YouTube API request failed for region ${region}: ${res.statusText}`);
-                        });
+                    if (errorMessage.includes('quotaExceeded') || res.status === 429) {
+                        throw new Error('QUOTA_EXCEEDED');
                     }
-                    throw new Error(`YouTube API request failed for region ${region}: ${res.statusText}`);
+
+                    throw new Error(`YouTube API request failed: ${errorMessage}`);
                 }
                 const data = await res.json();
                 // Tag items with region
@@ -163,7 +163,8 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
  * Fetch recent videos from a specific channel for niche inference
  */
 export async function fetchRecentChannelVideos(channelId: string): Promise<Video[]> {
-    if (!YOUTUBE_API_KEY) {
+    const apiKey = getYouTubeApiKey();
+    if (!apiKey) {
         throw new Error('YouTube API key not configured');
     }
 
@@ -173,7 +174,7 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             `${YOUTUBE_BASE_URL}/channels?` +
             `part=contentDetails&` +
             `id=${channelId}&` +
-            `key=${YOUTUBE_API_KEY}`
+            `key=${apiKey}`
         );
 
         const channelData = await channelResponse.json();
@@ -254,7 +255,8 @@ export function extractChannelId(url: string): string | null {
  * Fetch channel data from URL
  */
 export async function fetchChannelFromURL(channelUrl: string): Promise<{ channelId: string; channelName: string } | null> {
-    if (!YOUTUBE_API_KEY) {
+    const apiKey = getYouTubeApiKey();
+    if (!apiKey) {
         throw new Error('YouTube API key not configured');
     }
 
@@ -280,7 +282,7 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
                 `${YOUTUBE_BASE_URL}/channels?` +
                 `part=snippet&` +
                 `forHandle=${extractedId}&` +
-                `key=${YOUTUBE_API_KEY}`
+                `key=${apiKey}`
             );
             data = await response.json();
         }
@@ -298,4 +300,4 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
         return null;
     }
 }
- 
+

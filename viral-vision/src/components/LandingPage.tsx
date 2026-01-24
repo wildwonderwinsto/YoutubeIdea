@@ -4,6 +4,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Search, Sparkles } from 'lucide-react';
 import { SearchFilters } from '@/types/filters';
+import { ApiKeySettings } from './ApiKeySettings';
 
 interface LandingPageProps {
     onSearch: (niche: string) => void;
@@ -65,7 +66,7 @@ export function LandingPage({ onSearch, onChannelAnalysis, isLoading }: LandingP
                 {/* Input Section */}
                 <Card className="mx-auto max-w-2xl border-white/10 bg-gray-900/50 backdrop-blur-sm">
                     <CardHeader className="flex flex-row justify-end p-6 pb-0">
-                        {/* Filters removed from landing page per user request */}
+                        <ApiKeySettings />
                     </CardHeader>
 
                     <CardContent className="space-y-6 p-8 pt-2">
@@ -175,4 +176,4 @@ export function LandingPage({ onSearch, onChannelAnalysis, isLoading }: LandingP
         </div>
     );
 }
- 
+

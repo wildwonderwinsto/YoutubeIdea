@@ -97,12 +97,24 @@ export function useLocalStorage() {
         savePreferences({ ...preferences, savedIdeas: [] });
     };
 
+    const updateApiKeys = (keys: { youtube?: string; gemini?: string }) => {
+        const newPreferences = {
+            ...preferences,
+            apiKeys: {
+                ...preferences.apiKeys,
+                ...keys
+            }
+        };
+        savePreferences(newPreferences);
+    };
+
     return {
         preferences,
         updateLastNiche,
         saveIdea,
         removeIdea,
         clearAllIdeas,
+        updateApiKeys,
     };
 }
- 
+

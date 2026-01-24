@@ -1,7 +1,8 @@
 import { Video } from '@/types/video';
 import { Card, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
-import { Trophy, ExternalLink, Bookmark } from 'lucide-react';
+import { Trophy, ExternalLink, Bookmark, Download, Terminal } from 'lucide-react';
+import { toast } from './ui/use-toast';
 
 interface VideoCardProps {
     video: Video;
@@ -98,8 +99,8 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                         <div className="rounded bg-gray-800/50 p-2">
                             <p className="text-gray-500">AVD Tier</p>
                             <p className={`font-semibold ${video.estimatedAVDTier === 'High' ? 'text-green-400' :
-                                    video.estimatedAVDTier === 'Medium' ? 'text-yellow-400' :
-                                        'text-gray-400'
+                                video.estimatedAVDTier === 'Medium' ? 'text-yellow-400' :
+                                    'text-gray-400'
                                 }`}>
                                 {video.estimatedAVDTier}
                             </p>
@@ -124,6 +125,39 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                     <ExternalLink className="mr-1 h-3 w-3" />
                     Watch
                 </Button>
+                <div className="flex flex-1 gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                        onClick={() => {
+                            navigator.clipboard.writeText(youtubeUrl);
+                            window.open('https://cobalt.tools', '_blank');
+                            toast({
+                                title: "Link copied!",
+                                description: "Paste it in the downloader we just opened for you.",
+                            });
+                        }}
+                    >
+                        <Download className="mr-1 h-3 w-3" />
+                        Download
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="w-9 border-gray-700 bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white"
+                        onClick={() => {
+                            navigator.clipboard.writeText(`yt-dlp "${youtubeUrl}"`);
+                            toast({
+                                title: "Command copied!",
+                                description: "Run this in your terminal to download with yt-dlp.",
+                            });
+                        }}
+                        title="Copy yt-dlp command"
+                    >
+                        <Terminal className="h-3 w-3" />
+                    </Button>
+                </div>
                 {onSave && (
                     <Button
                         variant={isSaved ? 'default' : 'outline'}
@@ -139,4 +173,4 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
         </Card>
     );
 }
- 
+

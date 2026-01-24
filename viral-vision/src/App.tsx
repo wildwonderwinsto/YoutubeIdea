@@ -79,11 +79,12 @@ function App() {
         } catch (error: any) {
             console.error('Search error:', error);
 
-            if (error.message === 'QUOTA_EXCEEDED') {
+            if (error.message === 'QUOTA_EXCEEDED' || error.message === 'RATE_LIMIT') {
                 toast({
-                    title: 'Daily limit reached',
-                    description: 'Try again tomorrow or use cached results.',
+                    title: 'API Limit Reached',
+                    description: 'The shared API key has exceeded its daily quota. Please click the Settings gear icon to add your own API key.',
                     variant: 'destructive',
+                    duration: 10000,
                 });
             } else if (!navigator.onLine) {
                 toast({
@@ -94,7 +95,7 @@ function App() {
             } else {
                 toast({
                     title: 'Search failed',
-                    description: 'Could not fetch trending videos. Please try again.',
+                    description: error.message || 'Could not fetch trending videos. Please check your API key and try again.',
                     variant: 'destructive',
                 });
             }
@@ -266,4 +267,4 @@ function App() {
 }
 
 export default App;
- 
+
