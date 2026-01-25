@@ -21,9 +21,12 @@ function App() {
     const [currentNiche, setCurrentNiche] = useState('');
     const [nextVideoIdea, setNextVideoIdea] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isMoreLoading, setIsMoreLoading] = useState(false);
     const [loadingStatus, setLoadingStatus] = useState('Initializing...');
     const [showSavedDialog, setShowSavedDialog] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
+    // State for pagination tokens
+    const [nextPageTokenMap, setNextPageTokenMap] = useState<Record<string, string> | undefined>(undefined);
 
     const {
         preferences,
@@ -35,29 +38,44 @@ function App() {
 
     const savedVideoIds = new Set(preferences.savedIdeas.map(idea => idea.video.id));
 
-    const handleSearch = async (niche: string) => {
-        // Content safety check
-        const safetyCheck = await checkContentSafety(niche);
-        if (!safetyCheck.safe) {
-            toast({
-                title: 'Content Policy Violation',
-                description: safetyCheck.reason,
-                variant: 'destructive',
-            });
-            return;
+    const handleSearch = async (niche: string, isLoadMore = false) => {
+        // Content safety check (only on initial search)
+        if (!isLoadMore) {
+            const safetyCheck = await checkContentSafety(niche);
+            if (!safetyCheck.safe) {
+                toast({
+                    title: 'Content Policy Violation',
+                    description: safetyCheck.reason,
+                    variant: 'destructive',
+                });
+                return;
+            }
         }
 
-        setIsLoading(true);
-        setLoadingStatus('Checking content safety...');
-        setCurrentNiche(niche);
-        updateLastNiche(niche);
+        if (!isLoadMore) {
+            setIsLoading(true);
+            setLoadingStatus('Checking content safety...');
+            setCurrentNiche(niche);
+            updateLastNiche(niche);
+            setVideos([]); // Clear existing videos on new search
+            setNextPageTokenMap(undefined); // Reset tokens
+        } else {
+            setIsMoreLoading(true);
+            setLoadingStatus('Fetching more videos...');
+        }
 
         try {
             // Fetch trending videos
-            setLoadingStatus(`Fetching trending videos for "${niche}"...`);
-            const fetchedVideos = await fetchTrendingVideos(niche, filters.dateRange);
+            if (!isLoadMore) setLoadingStatus(`Fetching trending videos for "${niche}"...`);
 
-            if (fetchedVideos.length === 0) {
+            // Call API with filters and current tokens
+            const { videos: newVideos, nextPageTokenMap: newTokens } = await fetchTrendingVideos(
+                niche,
+                filters,
+                isLoadMore ? nextPageTokenMap : undefined
+            );
+
+            if (newVideos.length === 0 && !isLoadMore) {
                 toast({
                     title: 'No results found',
                     description: 'Try a broader or different keyword, or choose from the example niches below.',
@@ -66,19 +84,45 @@ function App() {
                 return;
             }
 
-            // Rank videos by viral score
-            setLoadingStatus('Ranking videos by viral potential...');
-            const rankedVideos = rankVideos(fetchedVideos);
-            setVideos(rankedVideos);
+            if (newVideos.length === 0 && isLoadMore) {
+                toast({
+                    title: 'No more results',
+                    description: 'You have reached the end of the list for this search.',
+                });
+            }
 
-            // Generate "Next Video Idea"
-            try {
-                setLoadingStatus('Generating AI video ideas...');
-                const idea = await generateNextVideoIdea(rankedVideos);
-                setNextVideoIdea(idea);
-            } catch (error) {
-                logger.warn('Failed to generate video idea:', error);
-                setNextVideoIdea('Create content similar to the top-ranked videos, focusing on recent trends and high-engagement topics in your niche.');
+            // Update tokens for next fetch
+            setNextPageTokenMap(newTokens);
+
+            // Rank videos by viral score
+            // Note: For load more, we rank the NEW batch separately. 
+            if (!isLoadMore) setLoadingStatus('Ranking videos by viral potential...');
+
+            const rankedNewVideos = rankVideos(newVideos);
+
+            setVideos(prev => {
+                // If loading more, append. If new search, replace (prev is empty anyway)
+                const combined = isLoadMore ? [...prev, ...rankedNewVideos] : rankedNewVideos;
+
+                // Deduplicate by ID just in case API returned overlaps
+                const uniqueIds = new Set();
+                return combined.filter(v => {
+                    if (uniqueIds.has(v.id)) return false;
+                    uniqueIds.add(v.id);
+                    return true;
+                });
+            });
+
+            // Generate "Next Video Idea" only on initial search
+            if (!isLoadMore) {
+                try {
+                    setLoadingStatus('Generating AI video ideas...');
+                    const idea = await generateNextVideoIdea(rankedNewVideos);
+                    setNextVideoIdea(idea);
+                } catch (error) {
+                    logger.warn('Failed to generate video idea:', error);
+                    setNextVideoIdea('Create content similar to the top-ranked videos, focusing on recent trends and high-engagement topics in your niche.');
+                }
             }
 
             setAppState('dashboard');
@@ -108,6 +152,7 @@ function App() {
             }
         } finally {
             setIsLoading(false);
+            setIsMoreLoading(false);
         }
     };
 
@@ -256,7 +301,7 @@ function App() {
         <>
             {appState === 'landing' && (
                 <LandingPage
-                    onSearch={handleSearch}
+                    onSearch={(n) => handleSearch(n)}
                     onChannelAnalysis={handleChannelAnalysis}
                     isLoading={isLoading}
                     filters={filters}
@@ -276,6 +321,9 @@ function App() {
                     savedCount={preferences.savedIdeas.length}
                     filters={filters}
                     onFilterChange={setFilters}
+                    onLoadMore={() => handleSearch(currentNiche, true)}
+                    hasMore={!!nextPageTokenMap && Object.keys(nextPageTokenMap).length > 0}
+                    isLoadingMore={isMoreLoading}
                 />
             )}
 
@@ -293,5 +341,3 @@ function App() {
 }
 
 export default App;
-
-

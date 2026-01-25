@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Lightbulb, TrendingUp, BarChart3, BookOpen, Home, Bookmark, Sparkles } from 'lucide-react';
+import { Lightbulb, TrendingUp, BarChart3, BookOpen, Home, Bookmark, Sparkles, Loader2 } from 'lucide-react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useState, useEffect } from 'react';
 import { generateWhyItWorksExplanation } from '@/lib/gemini-api';
@@ -25,6 +25,9 @@ interface DashboardProps {
     savedCount: number;
     filters: SearchFilters;
     onFilterChange: (filters: SearchFilters) => void;
+    onLoadMore: () => void;
+    hasMore: boolean;
+    isLoadingMore: boolean;
 }
 
 export function Dashboard({
@@ -38,17 +41,12 @@ export function Dashboard({
     savedCount,
     filters,
     onFilterChange,
+    onLoadMore,
+    hasMore,
+    isLoadingMore,
 }: DashboardProps) {
     const [activeTab, setActiveTab] = useState('leaderboard');
     const [explanations, setExplanations] = useState<Record<string, string>>({});
-    const [currentPage, setCurrentPage] = useState(1);
-    const APP_PAGE_SIZE = 24;
-
-    // Reset page on filter/tab change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filters, activeTab, videos.length]);
-
     // Apply filters
     const filteredVideos = videos.filter(v => {
         // Region filter
@@ -100,25 +98,11 @@ export function Dashboard({
         }
     });
 
-    // Pagination Logic
-    const totalItems = sortedVideos.length;
-    const totalPages = Math.ceil(totalItems / APP_PAGE_SIZE);
-    const startIndex = (currentPage - 1) * APP_PAGE_SIZE;
-    const currentVideos = sortedVideos.slice(startIndex, startIndex + APP_PAGE_SIZE);
-
-    const handleNextPage = () => {
-        if (currentPage < totalPages) {
-            setCurrentPage(prev => prev + 1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    };
-
-    const handlePrevPage = () => {
-        if (currentPage > 1) {
-            setCurrentPage(prev => prev - 1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    };
+    // Use sorted videos directly for display (infinite scroll style)
+    // Ensure we display complete rows (multiples of 3) to keep the grid looking professional
+    const displayCount = sortedVideos.length - (sortedVideos.length % 3);
+    const currentVideos = sortedVideos.slice(0, displayCount > 0 ? displayCount : sortedVideos.length);
+    const totalItems = currentVideos.length;
 
     // Filter outlier videos from the filtered set
     const outlierVideos = sortedVideos.filter(v => v.isOutlier && v.subscriberCount < 5000);
@@ -296,33 +280,29 @@ export function Dashboard({
 
                         {/* Pagination Footer */}
                         {totalItems > 0 && (
-                            <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-gray-800 pt-6 sm:flex-row">
+                            <div className="mt-8 flex flex-col items-center justify-center gap-4 border-t border-gray-800 pt-6">
+                                {/* Load More Button */}
+                                {hasMore && (
+                                    <Button
+                                        size="lg"
+                                        onClick={onLoadMore}
+                                        disabled={isLoadingMore}
+                                        className="min-w-[200px] bg-gray-800 text-white hover:bg-gray-700 hover:text-white"
+                                    >
+                                        {isLoadingMore ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Loading more...
+                                            </>
+                                        ) : (
+                                            'Load More Results'
+                                        )}
+                                    </Button>
+                                )}
+
                                 <p className="text-sm text-gray-400">
-                                    Showing <span className="font-medium text-white">{startIndex + 1}-{Math.min(startIndex + APP_PAGE_SIZE, totalItems)}</span> of <span className="font-medium text-white">{totalItems}</span> results
+                                    Displaying <span className="font-medium text-white">{totalItems}</span> videos
                                 </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handlePrevPage}
-                                        disabled={currentPage === 1}
-                                        className="border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50"
-                                    >
-                                        Previous
-                                    </Button>
-                                    <div className="flex items-center gap-1 px-2 text-sm text-gray-400">
-                                        Page <span className="font-medium text-white">{currentPage}</span> of {totalPages}
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleNextPage}
-                                        disabled={currentPage === totalPages}
-                                        className="border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white disabled:opacity-50"
-                                    >
-                                        Next
-                                    </Button>
-                                </div>
                             </div>
                         )}
                     </TabsContent>

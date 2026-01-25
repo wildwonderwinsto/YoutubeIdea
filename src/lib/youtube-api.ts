@@ -28,7 +28,16 @@ function parseISO8601Duration(duration: string): number {
 /**
  * Fetch trending videos by niche/keyword aggregated from wealthy regions
  */
-export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d' | '30d' = '7d'): Promise<Video[]> {
+import { SearchFilters } from '@/types/filters';
+
+/**
+ * Fetch trending videos by niche/keyword aggregated from wealthy regions
+ */
+export async function fetchTrendingVideos(
+    niche: string,
+    filters: SearchFilters,
+    pageTokenMap?: Record<string, string>
+): Promise<{ videos: Video[]; nextPageTokenMap: Record<string, string> }> {
     const apiKey = getYouTubeApiKey();
     if (!apiKey) {
         throw new Error('YouTube API key not configured. Please set it in Settings or in your .env file.');
@@ -37,70 +46,104 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
     // Calculate publishedAfter date based on filter
     const now = new Date();
     let daysToSubtract = 7;
-    if (dateRange === '24h') daysToSubtract = 1;
-    if (dateRange === '30d') daysToSubtract = 30;
+    // If user selected 24h, we ask API for recent stuff. If 7d or 30d, we use those.
+    // If they said "ALL", we default to 30d to ensure some recency, or we can omit it.
+    // Let's stick to the filter:
+    if (filters.dateRange === '24h') daysToSubtract = 1;
+    if (filters.dateRange === '30d') daysToSubtract = 30;
 
     const publishedAfter = new Date(now.getTime() - daysToSubtract * 24 * 60 * 60 * 1000).toISOString();
 
+    const regionsToSearch = filters.region !== 'ALL' ? [filters.region] : TARGET_REGIONS;
+
     try {
         // Step 1: Search for videos in multiple regions in parallel
-        const searchPromises = TARGET_REGIONS.map((region: string) =>
-            fetch(
-                `${YOUTUBE_BASE_URL}/search?` +
+        const searchPromises = regionsToSearch.map((region: string) => {
+            let url = `${YOUTUBE_BASE_URL}/search?` +
                 `part=snippet&` +
                 `q=${encodeURIComponent(niche)}&` +
                 `type=video&` +
-                `order=viewCount&` +
-                `maxResults=15&` + // Fetch fewer per region to keep total manageable
-                `publishedAfter=${publishedAfter}&` +
+                `maxResults=15&` +
                 `regionCode=${region}&` +
-                `key=${apiKey}`
-            ).then(async res => {
+                `key=${apiKey}`;
+
+            // Apply Filters to API Call
+
+            // Date Range
+            // Note: publishedAfter is compatible with 'relevance' and 'date' sort orders.
+            url += `&publishedAfter=${publishedAfter}`;
+
+            // Sort By
+            let order = 'viewCount'; // default
+            if (filters.sortBy === 'date') order = 'date';
+            if (filters.sortBy === 'rating') order = 'rating';
+            if (filters.sortBy === 'relevance') order = 'relevance';
+            // Note: 'viewCount' is strictly view count. 'relevance' is default YouTube algo.
+            url += `&order=${order}`;
+
+            // Duration
+            if (filters.duration === 'SHORT') url += `&videoDuration=short`;
+            if (filters.duration === 'MEDIUM') url += `&videoDuration=medium`;
+            if (filters.duration === 'LONG') url += `&videoDuration=long`;
+
+            // Pagination Token
+            if (pageTokenMap && pageTokenMap[region]) {
+                url += `&pageToken=${pageTokenMap[region]}`;
+            }
+
+            return fetch(url).then(async res => {
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     const errorMessage = errorData.error?.message || res.statusText || `Status ${res.status}`;
-
-                    // Handle specific API errors like quota exceeded
                     if (errorMessage.includes('quotaExceeded') || res.status === 429) {
                         throw new Error('QUOTA_EXCEEDED');
                     }
-
                     throw new Error(`YouTube API request failed: ${errorMessage}`);
                 }
                 const data = await res.json();
-                // Tag items with region
+                // Tag items within the region
                 if (data.items) {
                     data.items = data.items.map((item: any) => ({ ...item, region }));
                 }
-                return data;
-            })
-        );
+                return {
+                    region,
+                    items: data.items || [],
+                    nextPageToken: data.nextPageToken
+                };
+            });
+        });
 
         const searchResults = await Promise.all(searchPromises);
 
-        // Aggregate and deduplicate video IDs, keeping track of region
+        // Collect new page tokens
+        const newPageTokenMap: Record<string, string> = {};
+        searchResults.forEach(result => {
+            if (result.nextPageToken) {
+                newPageTokenMap[result.region] = result.nextPageToken;
+            }
+        });
+
+        // Aggregate and deduplicate video IDs
         const videoIdSet = new Set<string>();
         const regionMap = new Map<string, string>(); // videoId -> region
 
         searchResults.forEach((data: any) => {
-            if (data.items) {
-                data.items.forEach((item: any) => {
-                    if (!videoIdSet.has(item.id.videoId)) {
-                        videoIdSet.add(item.id.videoId);
-                        regionMap.set(item.id.videoId, item.region);
-                    }
-                });
-            }
+            data.items.forEach((item: any) => {
+                if (!videoIdSet.has(item.id.videoId)) {
+                    videoIdSet.add(item.id.videoId);
+                    regionMap.set(item.id.videoId, item.region);
+                }
+            });
         });
 
         if (videoIdSet.size === 0) {
-            return [];
+            return { videos: [], nextPageTokenMap: newPageTokenMap };
         }
 
-        // Limit to 50 videos max for detailed stats call
+        // Limit to 50 videos max for detailed stats call per batch
         const videoIds = Array.from(videoIdSet).slice(0, 50).join(',');
 
-        // Step 2: Fetch detailed video statistics from the aggregated list
+        // Step 2: Fetch detailed video statistics
         const statsResponse = await fetch(
             `${YOUTUBE_BASE_URL}/videos?` +
             `part=statistics,snippet,contentDetails&` +
@@ -131,13 +174,13 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
 
         const channelData = await channelResponse.json();
 
-        // Step 4: Build channel map for quick lookup
+        // Step 4: Build channel map
         const channelMap = new Map();
         channelData.items.forEach((channel: any) => {
             channelMap.set(channel.id, parseInt(channel.statistics.subscriberCount || '0'));
         });
 
-        // Step 5: Combine all data into Video objects and enrich them
+        // Step 5: Combine data
         const videos: Video[] = statsData.items.map((item: any) => {
             const rawVideo = {
                 id: item.id,
@@ -148,7 +191,7 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
                 views: parseInt(item.statistics.viewCount || '0'),
                 likes: parseInt(item.statistics.likeCount || '0'),
                 comments: parseInt(item.statistics.commentCount || '0'),
-                shares: 0, // Not available in API
+                shares: 0,
                 lengthSeconds: parseISO8601Duration(item.contentDetails.duration),
                 publishedAt: new Date(item.snippet.publishedAt),
                 fetchedAt: new Date(),
@@ -158,7 +201,7 @@ export async function fetchTrendingVideos(niche: string, dateRange: '24h' | '7d'
             return enrichVideo(rawVideo);
         });
 
-        return videos;
+        return { videos, nextPageTokenMap: newPageTokenMap };
     } catch (error) {
         logger.error('YouTube API error:', error);
         throw error;
