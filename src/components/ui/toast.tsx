@@ -30,10 +30,16 @@ const Toast = React.forwardRef<
         <ToastPrimitives.Root
             ref={ref}
             className={cn(
-                'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
-                variant === 'default' && 'border bg-background text-foreground',
+                'group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-xl border p-6 pr-8 shadow-2xl transition-all',
+                'data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none',
+                'data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out',
+                'data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full',
+                'data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
+                // Professional Glassmorphism Styles
+                'backdrop-blur-xl bg-background/80 border-border/50 supports-[backdrop-filter]:bg-background/60',
+                variant === 'default' && 'text-foreground',
                 variant === 'destructive' &&
-                'destructive group border-destructive bg-destructive text-destructive-foreground',
+                'destructive group border-destructive/50 bg-destructive/10 text-destructive shadow-destructive/20',
                 className
             )}
             {...props}
@@ -101,4 +107,4 @@ ToastDescription.displayName = ToastPrimitives.Description.displayName
 
 export { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose, ToastAction }
 
- 
+

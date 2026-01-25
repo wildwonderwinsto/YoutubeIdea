@@ -21,6 +21,7 @@ function App() {
     const [currentNiche, setCurrentNiche] = useState('');
     const [nextVideoIdea, setNextVideoIdea] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingStatus, setLoadingStatus] = useState('Initializing...');
     const [showSavedDialog, setShowSavedDialog] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
 
@@ -47,11 +48,13 @@ function App() {
         }
 
         setIsLoading(true);
+        setLoadingStatus('Checking content safety...');
         setCurrentNiche(niche);
         updateLastNiche(niche);
 
         try {
             // Fetch trending videos
+            setLoadingStatus(`Fetching trending videos for "${niche}"...`);
             const fetchedVideos = await fetchTrendingVideos(niche, filters.dateRange);
 
             if (fetchedVideos.length === 0) {
@@ -64,11 +67,13 @@ function App() {
             }
 
             // Rank videos by viral score
+            setLoadingStatus('Ranking videos by viral potential...');
             const rankedVideos = rankVideos(fetchedVideos);
             setVideos(rankedVideos);
 
             // Generate "Next Video Idea"
             try {
+                setLoadingStatus('Generating AI video ideas...');
                 const idea = await generateNextVideoIdea(rankedVideos);
                 setNextVideoIdea(idea);
             } catch (error) {
@@ -108,6 +113,7 @@ function App() {
 
     const handleChannelAnalysis = async (channelUrl: string) => {
         setIsLoading(true);
+        setLoadingStatus('Analyzing channel profile...');
 
         try {
             // Fetch channel info
@@ -129,6 +135,7 @@ function App() {
             });
 
             // Fetch recent videos for context
+            setLoadingStatus('Scanning recent uploads...');
             const recentVideos = await fetchRecentChannelVideos(channelInfo.channelId);
 
             if (recentVideos.length === 0) {
@@ -143,6 +150,7 @@ function App() {
 
             // Infer niche using Gemini with metadata
             try {
+                setLoadingStatus('Inferring niche from content...');
                 const inferredNiche = await inferNicheFromMetadata(channelInfo.channelName, recentVideos);
 
                 toast({
@@ -219,11 +227,26 @@ function App() {
     // Show loading overlay
     if (isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-black">
-                <div className="text-center">
-                    <Loader2 className="mx-auto h-12 w-12 animate-spin text-red-500" />
-                    <p className="mt-4 text-lg text-gray-300">Analyzing trends...</p>
-                    <p className="mt-2 text-sm text-gray-500">This may take a few moments</p>
+            <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-black p-4">
+                <div className="text-center space-y-6 max-w-md w-full">
+                    <div className="relative mx-auto h-20 w-20">
+                        <div className="absolute inset-0 rounded-full border-t-2 border-red-500/20 blur-sm animate-pulse" />
+                        <Loader2 className="h-full w-full animate-spin text-red-500 relative z-10" />
+                    </div>
+
+                    <div className="space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <h3 className="text-2xl font-semibold text-white tracking-tight">
+                            {loadingStatus}
+                        </h3>
+                        <p className="text-gray-400 text-sm">
+                            Powered by AI · Analyzing real-time data
+                        </p>
+                    </div>
+
+                    {/* Simple progress bar visual */}
+                    <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-red-600 to-red-400 w-1/2 animate-[shimmer_2s_infinite] rounded-full" />
+                    </div>
                 </div>
             </div>
         );
@@ -271,4 +294,4 @@ function App() {
 
 export default App;
 
- 
+

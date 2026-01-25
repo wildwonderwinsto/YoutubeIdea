@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/toast'
 
-const TOAST_LIMIT = 3
+const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 5000
 
 type ToasterToast = {
@@ -145,6 +145,7 @@ function toast(props: Omit<ToasterToast, 'id'>) {
         type: actionTypes.ADD_TOAST,
         toast: {
             ...props,
+            duration: props.duration ?? 3500, // Default duration extended to 3.5s for better readability
             id,
         },
     })
@@ -202,4 +203,4 @@ export function Toaster() {
     )
 }
 
- 
+

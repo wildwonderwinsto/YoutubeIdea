@@ -56,6 +56,17 @@ export function Dashboard({
             if (!v.region || v.region !== filters.region) return false;
         }
 
+        // Date Range filter (Client-side refinement)
+        if (filters.dateRange !== '7d') { // Default fetch is usually based on search, but we refine here
+            const now = new Date();
+            const videoDate = new Date(v.publishedAt);
+            const diffHours = (now.getTime() - videoDate.getTime()) / (1000 * 60 * 60);
+
+            if (filters.dateRange === '24h' && diffHours > 24) return false;
+            // Note: If user wants 30d but we only fetched 7d via API, we can't show more. 
+            // This client-side filter only restricts.
+        }
+
         // Duration filter
         if (filters.duration === 'SHORT' && v.lengthSeconds >= 60) return false;
         if (filters.duration === 'MEDIUM' && (v.lengthSeconds < 60 || v.lengthSeconds > 300)) return false;
@@ -73,11 +84,27 @@ export function Dashboard({
         return true;
     });
 
+    // Apply Sorting
+    const sortedVideos = [...filteredVideos].sort((a, b) => {
+        switch (filters.sortBy) {
+            case 'viewCount':
+                return b.views - a.views;
+            case 'date':
+                return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+            case 'rating': // Using Likes as proxy for rating
+                return b.likes - a.likes;
+            case 'relevance':
+            default:
+                // Default to Viral Score (already sorted by rankVideos in App, but good to enforce)
+                return b.viralScore - a.viralScore;
+        }
+    });
+
     // Pagination Logic
-    const totalItems = filteredVideos.length;
+    const totalItems = sortedVideos.length;
     const totalPages = Math.ceil(totalItems / APP_PAGE_SIZE);
     const startIndex = (currentPage - 1) * APP_PAGE_SIZE;
-    const currentVideos = filteredVideos.slice(startIndex, startIndex + APP_PAGE_SIZE);
+    const currentVideos = sortedVideos.slice(startIndex, startIndex + APP_PAGE_SIZE);
 
     const handleNextPage = () => {
         if (currentPage < totalPages) {
@@ -94,10 +121,10 @@ export function Dashboard({
     };
 
     // Filter outlier videos from the filtered set
-    const outlierVideos = filteredVideos.filter(v => v.isOutlier && v.subscriberCount < 5000);
+    const outlierVideos = sortedVideos.filter(v => v.isOutlier && v.subscriberCount < 5000);
 
     // Prepare graph data from filtered set
-    const graphData = filteredVideos
+    const graphData = sortedVideos
         .filter(v => v.lengthSeconds > 0)
         .map(v => ({
             length: v.lengthSeconds,
