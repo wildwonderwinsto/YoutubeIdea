@@ -90,31 +90,67 @@ npm run preview  # Preview production build locally
 
 ## Deployment
 
-### Backend (Required)
+### Backend Deployment (Render with Docker)
 
-The backend handles API security and caching. Deploy the `server` folder to a Node.js host like Railway, Render, Fly.io, or Heroku.
+The backend requires `ffmpeg` and `yt-dlp` for video downloads. We use Docker to ensure these are installed.
 
-**Environment Variables:**
-```env
-NODE_ENV=production
-PORT=3000
-YOUTUBE_API_KEY=your_production_key
-GEMINI_API_KEY=your_production_key
-ALLOWED_ORIGINS=https://your-frontend-domain.com
-```
+**Prerequisites:**
+- A `server/Dockerfile` is provided in this repo
+- GitHub repository connected to Render
 
-### Frontend
+**Steps:**
 
-Deploy to Vercel/Netlify/Cloudflare Pages.
+1. Go to [dashboard.render.com](https://dashboard.render.com) and sign up
+2. Click **New +** → **Web Service**
+3. Connect your GitHub repository
+4. **Configuration:**
+   - **Name**: `viralvision-api` (or your choice)
+   - **Root Directory**: `server` ⚠️ (Critical!)
+   - **Runtime**: **Docker**
+   - **Instance Type**: Free (or paid for better performance)
+5. **Environment Variables:**
+   ```
+   NODE_ENV=production
+   PORT=3000
+   YOUTUBE_API_KEY=<your_youtube_api_key>
+   GEMINI_API_KEY=<your_gemini_api_key>
+   ALLOWED_ORIGINS=* (temporarily, will update after frontend deploy)
+   ```
+6. Click **Create Web Service**
+7. **Note your backend URL** (e.g., `https://viralvision-api.onrender.com`)
 
-**Environment Variables:**
-```env
-VITE_BACKEND_URL=https://your-backend-domain.com
-```
+> **Note**: Free tier "sleeps" after 15 minutes of inactivity. First request may take ~50 seconds to wake up.
 
-**Important:** Update `ALLOWED_ORIGINS` in your backend configuration to match your frontend domain!
+### Frontend Deployment (Vercel)
 
-**Note:** The download server feature requires a separate backend deployment. For production, deploy the `server` folder separately or disable the download feature.
+1. Go to [vercel.com](https://vercel.com) and sign up
+2. Click **Add New...** → **Project**
+3. Import your GitHub repository
+4. **Configuration:**
+   - **Framework Preset**: Vite (auto-detected)
+   - **Root Directory**: `./` (default)
+   - **Build Command**: `npm run build` (auto-detected)
+5. **Environment Variables:**
+   - **Key**: `VITE_BACKEND_URL`
+   - **Value**: Your Render URL (e.g., `https://viralvision-api.onrender.com`)
+     - ⚠️ No trailing slash!
+6. Click **Deploy**
+7. **Note your frontend URL** (e.g., `https://wildwonderwinsto.vercel.app`)
+
+### Final Step: Update CORS
+
+1. Go back to **Render Dashboard** → Your service → **Environment**
+2. Edit `ALLOWED_ORIGINS`
+3. Change from `*` to your Vercel URL (e.g., `https://wildwonderwinsto.vercel.app`)
+4. Save (Render will auto-redeploy)
+
+### Verify Deployment
+
+- **Backend Health**: Visit `https://your-backend.onrender.com/health`
+  - Should return: `{"status":"healthy","apis":{"youtube":"configured","gemini":"configured"}}`
+- **Frontend**: Visit your Vercel URL and try a search
+
+**Important:** The download feature requires `ffmpeg` (included in Docker) but may have limitations on free tier storage.
 
 **Important:** The download server requires `ffmpeg` to be installed on the system for merging video and audio streams. Install it from [ffmpeg.org](https://ffmpeg.org/download.html) or via package manager:
 
