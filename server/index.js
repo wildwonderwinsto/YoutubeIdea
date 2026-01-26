@@ -5,24 +5,85 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const https = require('https'); // For proxying requests
+const https = require('https');
+const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-app.use(cors());
+// Security: CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Logging
+if (isDevelopment) {
+    app.use(morgan('dev'));
+} else {
+    // Basic logging for production
+    app.use(morgan('combined'));
+}
+
 app.use(express.json());
 
-// Helper for proxying YouTube requests
+// Security: Rate Limiting
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: 'Too many requests, please try again later.' }
+});
+
+const searchLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 20, // 20 searches per minute (slightly higher than 10 to allow for bursts)
+    message: { error: 'Search rate limit exceeded. Please wait.' }
+});
+
+// Apply rate limits
+app.use('/api/', apiLimiter);
+app.use('/download', searchLimiter);
+
+// Validation Middleware
+const validateYouTubeRequest = (req, res, next) => {
+    const { q, maxResults, regionCode } = req.query;
+
+    // Validate search query
+    if (q && (typeof q !== 'string' || q.length > 200)) {
+        return res.status(400).json({ error: 'Invalid search query' });
+    }
+
+    // Validate maxResults
+    if (maxResults && (isNaN(maxResults) || parseInt(maxResults) > 50)) {
+        return res.status(400).json({ error: 'Invalid maxResults' });
+    }
+
+    // Validate regionCode (basic check)
+    if (regionCode && (typeof regionCode !== 'string' || regionCode.length > 2)) {
+        return res.status(400).json({ error: 'Invalid region code' });
+    }
+
+    next();
+};
+
+// Helper for proxying YouTube requests with better error handling
 const proxyYouTubeRequest = (endpoint, req, res) => {
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (!apiKey) {
         return res.status(500).json({ error: 'Server configuration error: YouTube API key missing' });
     }
 
-    // Construct upstream URL
-    // Append server-side API key to the query params from the client
     const queryParams = new URLSearchParams(req.query);
     queryParams.append('key', apiKey);
 
@@ -32,24 +93,87 @@ const proxyYouTubeRequest = (endpoint, req, res) => {
         console.log(`📡 Proxying ${endpoint} request`);
     }
 
-    https.get(url, (upstreamRes) => {
+    const request = https.get(url, { timeout: 10000 }, (upstreamRes) => {
         const { statusCode } = upstreamRes;
         const contentType = upstreamRes.headers['content-type'];
 
         res.status(statusCode);
-        res.set('Content-Type', contentType);
+        if (contentType) res.set('Content-Type', contentType);
 
-        // Pipe the response directly
         upstreamRes.pipe(res);
-    }).on('error', (e) => {
+
+        upstreamRes.on('error', (e) => {
+            console.error('Upstream error:', e);
+            if (!res.headersSent) {
+                res.status(502).json({ error: 'Upstream service error' });
+            }
+        });
+    });
+
+    request.on('timeout', () => {
+        request.destroy();
+        if (!res.headersSent) {
+            res.status(504).json({ error: 'Request timeout' });
+        }
+    });
+
+    request.on('error', (e) => {
         console.error(`Proxy Error (${endpoint}):`, e);
-        res.status(500).json({ error: 'Proxy request failed', details: e.message });
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Proxy request failed', details: e.message });
+        }
     });
 };
 
-// YouTube API Proxy Endpoints
-app.get('/api/youtube/search', (req, res) => proxyYouTubeRequest('search', req, res));
-app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res));
+// Gemini Proxy Endpoint
+app.post('/api/gemini/generate', async (req, res) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        return res.status(500).json({ error: 'Gemini API key not configured' });
+    }
+
+    const { prompt, enableSearch } = req.body;
+
+    if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ error: 'Invalid prompt' });
+    }
+
+    const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+    };
+
+    if (enableSearch) {
+        requestBody.tools = [{ googleSearch: {} }];
+    }
+
+    try {
+        // Use fetch (available in node 18+)
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            }
+        );
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Gemini API error: ${response.status} ${JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Gemini Proxy Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// YouTube API Proxy Endpoints with Validation
+app.get('/api/youtube/search', validateYouTubeRequest, (req, res) => proxyYouTubeRequest('search', req, res));
+app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res)); // ID validation is complex, skipping for now
 app.get('/api/youtube/channels', (req, res) => proxyYouTubeRequest('channels', req, res));
 app.get('/api/youtube/playlistItems', (req, res) => proxyYouTubeRequest('playlistItems', req, res));
 

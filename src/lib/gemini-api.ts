@@ -1,8 +1,6 @@
 import { Video } from '@/types/video';
-import { getGeminiApiKey } from './api-config';
+import { getBackendUrl } from './api-config';
 import { logger } from './logger';
-
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash';
 
 interface GeminiResponse {
     candidates: Array<{
@@ -18,39 +16,21 @@ interface GeminiResponse {
  * Call Gemini API with a prompt
  */
 async function callGeminiAPI(prompt: string, enableSearch: boolean = false): Promise<string> {
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-        throw new Error('Gemini API key not configured. Please set it in Settings or in your .env file.');
-    }
-
-    const requestBody: any = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
-        },
-    };
-
-    if (enableSearch) {
-        requestBody.tools = [{ googleSearch: {} }];
-    }
+    const backendUrl = getBackendUrl();
 
     try {
-        const response = await fetch(
-            `${GEMINI_BASE_URL}:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-            }
-        );
+        const response = await fetch(`${backendUrl}/api/gemini/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, enableSearch })
+        });
 
         if (!response.ok) {
             if (response.status === 429) {
                 throw new Error('RATE_LIMIT');
             }
             const errorData = await response.json().catch(() => ({}));
-            const errorMessage = errorData.error?.message || response.statusText;
+            const errorMessage = errorData.error || response.statusText;
             throw new Error(`Gemini API error (${response.status}): ${errorMessage}`);
         }
 
@@ -167,4 +147,4 @@ export async function checkContentSafety(niche: string): Promise<{ safe: boolean
     return { safe: true };
 }
 
- 
+
