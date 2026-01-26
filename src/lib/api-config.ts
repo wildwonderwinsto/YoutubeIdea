@@ -4,19 +4,9 @@
 
 const STORAGE_KEY = 'viralvision_preferences';
 
-export function getYouTubeApiKey(): string {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const preferences = JSON.parse(stored);
-            if (preferences.apiKeys?.youtube) {
-                return preferences.apiKeys.youtube;
-            }
-        }
-    } catch (e) {
-        // Ignore JSON parse errors
-    }
-    return import.meta.env.VITE_YOUTUBE_API_KEY || '';
+// YouTube API key is now handled by the backend server
+export function getBackendUrl(): string {
+    return import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 }
 
 export function getGeminiApiKey(): string {
@@ -33,4 +23,3 @@ export function getGeminiApiKey(): string {
     }
     return import.meta.env.VITE_GEMINI_API_KEY || '';
 }
-

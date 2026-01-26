@@ -1,9 +1,8 @@
 import { Video } from '@/types/video';
 import { enrichVideo } from './viral-score';
-import { getYouTubeApiKey } from './api-config';
+import { getBackendUrl } from './api-config';
 import { logger } from './logger';
-
-const YOUTUBE_BASE_URL = 'https://www.googleapis.com/youtube/v3';
+import { SearchFilters } from '@/types/filters';
 
 // Wealthy regions to aggregate (US, UK, Canada, Australia, Germany)
 const TARGET_REGIONS = ['US', 'GB', 'CA', 'AU', 'DE'];
@@ -28,20 +27,12 @@ function parseISO8601Duration(duration: string): number {
 /**
  * Fetch trending videos by niche/keyword aggregated from wealthy regions
  */
-import { SearchFilters } from '@/types/filters';
-
-/**
- * Fetch trending videos by niche/keyword aggregated from wealthy regions
- */
 export async function fetchTrendingVideos(
     niche: string,
     filters: SearchFilters,
     pageTokenMap?: Record<string, string>
 ): Promise<{ videos: Video[]; nextPageTokenMap: Record<string, string> }> {
-    const apiKey = getYouTubeApiKey();
-    if (!apiKey) {
-        throw new Error('YouTube API key not configured. Please set it in Settings or in your .env file.');
-    }
+    const backendUrl = getBackendUrl();
 
     // Calculate publishedAfter date based on filter
     const now = new Date();
@@ -59,13 +50,12 @@ export async function fetchTrendingVideos(
     try {
         // Step 1: Search for videos in multiple regions in parallel
         const searchPromises = regionsToSearch.map((region: string) => {
-            let url = `${YOUTUBE_BASE_URL}/search?` +
+            let url = `${backendUrl}/api/youtube/search?` +
                 `part=snippet&` +
                 `q=${encodeURIComponent(niche)}&` +
                 `type=video&` +
                 `maxResults=15&` +
-                `regionCode=${region}&` +
-                `key=${apiKey}`;
+                `regionCode=${region}`;
 
             // Apply Filters to API Call
 
@@ -145,10 +135,9 @@ export async function fetchTrendingVideos(
 
         // Step 2: Fetch detailed video statistics
         const statsResponse = await fetch(
-            `${YOUTUBE_BASE_URL}/videos?` +
+            `${backendUrl}/api/youtube/videos?` +
             `part=statistics,snippet,contentDetails&` +
-            `id=${videoIds}&` +
-            `key=${apiKey}`
+            `id=${videoIds}`
         );
 
         if (!statsResponse.ok) {
@@ -161,10 +150,9 @@ export async function fetchTrendingVideos(
         // Step 3: Fetch channel subscriber counts
         const channelIds = statsData.items.map((item: any) => item.snippet.channelId).join(',');
         const channelResponse = await fetch(
-            `${YOUTUBE_BASE_URL}/channels?` +
+            `${backendUrl}/api/youtube/channels?` +
             `part=statistics&` +
-            `id=${channelIds}&` +
-            `key=${apiKey}`
+            `id=${channelIds}`
         );
 
         if (!channelResponse.ok) {
@@ -212,18 +200,14 @@ export async function fetchTrendingVideos(
  * Fetch recent videos from a specific channel for niche inference
  */
 export async function fetchRecentChannelVideos(channelId: string): Promise<Video[]> {
-    const apiKey = getYouTubeApiKey();
-    if (!apiKey) {
-        throw new Error('YouTube API key not configured');
-    }
+    const backendUrl = getBackendUrl();
 
     try {
         // Step 1: Get channel's upload playlist ID
         const channelResponse = await fetch(
-            `${YOUTUBE_BASE_URL}/channels?` +
+            `${backendUrl}/api/youtube/channels?` +
             `part=contentDetails&` +
-            `id=${channelId}&` +
-            `key=${apiKey}`
+            `id=${channelId}`
         );
 
         const channelData = await channelResponse.json();
@@ -233,11 +217,10 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
 
         // Step 2: Get recent videos from that playlist
         const playlistResponse = await fetch(
-            `${YOUTUBE_BASE_URL}/playlistItems?` +
+            `${backendUrl}/api/youtube/playlistItems?` +
             `part=snippet&` +
             `playlistId=${uploadsPlaylistId}&` +
-            `maxResults=5&` +
-            `key=${apiKey}`
+            `maxResults=5`
         );
 
         const playlistData = await playlistResponse.json();
@@ -313,10 +296,7 @@ export function extractChannelId(url: string): string | null {
  * Fetch channel data from URL
  */
 export async function fetchChannelFromURL(channelUrl: string): Promise<{ channelId: string; channelName: string } | null> {
-    const apiKey = getYouTubeApiKey();
-    if (!apiKey) {
-        throw new Error('YouTube API key not configured');
-    }
+    const backendUrl = getBackendUrl();
 
     const extractedId = extractChannelId(channelUrl);
     if (!extractedId) {
@@ -326,10 +306,9 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
     try {
         // Try direct channel ID first
         let response = await fetch(
-            `${YOUTUBE_BASE_URL}/channels?` +
+            `${backendUrl}/api/youtube/channels?` +
             `part=snippet&` +
-            `id=${extractedId}&` +
-            `key=${apiKey}`
+            `id=${extractedId}`
         );
 
         let data = await response.json();
@@ -337,10 +316,9 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
         // If no results, try as username
         if (!data.items || data.items.length === 0) {
             response = await fetch(
-                `${YOUTUBE_BASE_URL}/channels?` +
+                `${backendUrl}/api/youtube/channels?` +
                 `part=snippet&` +
-                `forHandle=${extractedId}&` +
-                `key=${apiKey}`
+                `forHandle=${extractedId}`
             );
             data = await response.json();
         }

@@ -1,9 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const https = require('https'); // For proxying requests
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,13 +14,52 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 app.use(cors());
 app.use(express.json());
 
+// Helper for proxying YouTube requests
+const proxyYouTubeRequest = (endpoint, req, res) => {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+        return res.status(500).json({ error: 'Server configuration error: YouTube API key missing' });
+    }
+
+    // Construct upstream URL
+    // Append server-side API key to the query params from the client
+    const queryParams = new URLSearchParams(req.query);
+    queryParams.append('key', apiKey);
+
+    const url = `https://www.googleapis.com/youtube/v3/${endpoint}?${queryParams.toString()}`;
+
+    if (isDevelopment) {
+        console.log(`📡 Proxying ${endpoint} request`);
+    }
+
+    https.get(url, (upstreamRes) => {
+        const { statusCode } = upstreamRes;
+        const contentType = upstreamRes.headers['content-type'];
+
+        res.status(statusCode);
+        res.set('Content-Type', contentType);
+
+        // Pipe the response directly
+        upstreamRes.pipe(res);
+    }).on('error', (e) => {
+        console.error(`Proxy Error (${endpoint}):`, e);
+        res.status(500).json({ error: 'Proxy request failed', details: e.message });
+    });
+};
+
+// YouTube API Proxy Endpoints
+app.get('/api/youtube/search', (req, res) => proxyYouTubeRequest('search', req, res));
+app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res));
+app.get('/api/youtube/channels', (req, res) => proxyYouTubeRequest('channels', req, res));
+app.get('/api/youtube/playlistItems', (req, res) => proxyYouTubeRequest('playlistItems', req, res));
+
 // Health check
 app.get('/', (req, res) => {
-    res.json({ status: 'ViralVision Downloader Server is Running 🚀' });
+    res.json({ status: 'ViralVision Server (with Proxy) is Running 🚀' });
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'viral-vision-downloader' });
+    res.json({ status: 'ok', service: 'viral-vision-server' });
 });
 
 // Download endpoint - uses temp file approach for reliable video+audio merging
@@ -37,7 +78,7 @@ app.get('/download', async (req, res) => {
     // Detect platform and get appropriate yt-dlp binary
     const platform = process.platform;
     let ytDlpBinary;
-    
+
     if (platform === 'win32') {
         ytDlpBinary = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp.exe');
     } else if (platform === 'darwin') {
@@ -49,7 +90,7 @@ app.get('/download', async (req, res) => {
 
     if (isDevelopment) {
         console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
-        
+
         // Check if ffmpeg is available (needed for merging video+audio)
         const { execSync } = require('child_process');
         try {
@@ -103,30 +144,30 @@ app.get('/download', async (req, res) => {
                 // Log all stderr output to see what format is being selected
                 console.log(`yt-dlp: ${errorText}`);
             }
-            
+
             // Check for empty file error specifically
             if (errorText.toLowerCase().includes('downloaded file is empty') ||
                 errorText.toLowerCase().includes('file is empty')) {
                 hasError = true;
                 errorMessage += 'Downloaded file is empty. This usually means no format matched the selector. ';
             }
-            
+
             // Check for empty file error specifically (this is a critical error)
             if (errorText.toLowerCase().includes('downloaded file is empty') ||
                 errorText.toLowerCase().includes('file is empty')) {
                 hasError = true;
                 errorMessage += 'Downloaded file is empty. Format selector may be too restrictive. ';
             }
-            
+
             // Check for actual errors (not just warnings)
-            if (errorText.toLowerCase().includes('error') || 
+            if (errorText.toLowerCase().includes('error') ||
                 errorText.toLowerCase().includes('unable') ||
                 errorText.toLowerCase().includes('failed') ||
                 errorText.toLowerCase().includes('unavailable')) {
                 hasError = true;
                 errorMessage += errorText;
             }
-            
+
             // Log format and merge information
             if (errorText.toLowerCase().includes('merging formats') ||
                 errorText.toLowerCase().includes('ffmpeg') ||
@@ -137,7 +178,7 @@ app.get('/download', async (req, res) => {
                     console.log(`ℹ️ ${errorText.trim()}`);
                 }
             }
-            
+
             // Check for merge failures
             if (errorText.toLowerCase().includes('error merging') ||
                 errorText.toLowerCase().includes('merge failed') ||
@@ -146,9 +187,9 @@ app.get('/download', async (req, res) => {
                 hasError = true;
                 errorMessage += `Merge error: ${errorText}. Make sure ffmpeg is installed and in PATH. `;
             }
-            
+
             // Check if it's downloading video-only (no audio)
-            if (errorText.toLowerCase().includes('video only') || 
+            if (errorText.toLowerCase().includes('video only') ||
                 errorText.toLowerCase().includes('only video')) {
                 if (isDevelopment) {
                     console.warn(`⚠️ Warning: Video-only format detected. Audio may be missing.`);
@@ -158,7 +199,26 @@ app.get('/download', async (req, res) => {
 
         // Wait for download to complete
         await new Promise((resolve, reject) => {
+            const onClose = () => {
+                ytDlp.kill();
+                if (fs.existsSync(tempFilePath)) {
+                    try {
+                        fs.unlinkSync(tempFilePath);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                }
+                if (isDevelopment) {
+                    console.log('🚫 Client disconnected during YouTube download');
+                }
+                reject(new Error('Client disconnected'));
+            };
+
+            req.on('close', onClose);
+
             ytDlp.on('close', (code) => {
+                req.off('close', onClose); // Remove listener so it doesn't fire during streaming
+
                 if (code !== 0 || hasError) {
                     // Clean up temp file on error
                     if (fs.existsSync(tempFilePath)) {
@@ -175,6 +235,8 @@ app.get('/download', async (req, res) => {
             });
 
             ytDlp.on('error', (error) => {
+                req.off('close', onClose);
+
                 // Clean up temp file on error
                 if (fs.existsSync(tempFilePath)) {
                     try {
@@ -184,21 +246,6 @@ app.get('/download', async (req, res) => {
                     }
                 }
                 reject(error);
-            });
-
-            // Handle client disconnect during download
-            req.on('close', () => {
-                ytDlp.kill();
-                if (fs.existsSync(tempFilePath)) {
-                    try {
-                        fs.unlinkSync(tempFilePath);
-                    } catch (e) {
-                        // Ignore cleanup errors
-                    }
-                }
-                if (isDevelopment) {
-                    console.log('🚫 Client disconnected during download');
-                }
             });
         });
 
@@ -241,7 +288,7 @@ app.get('/download', async (req, res) => {
 
         // Stream file to response
         const fileStream = fs.createReadStream(tempFilePath);
-        
+
         fileStream.on('error', (error) => {
             if (isDevelopment) {
                 console.error('File stream error:', error);
@@ -303,8 +350,8 @@ app.get('/download', async (req, res) => {
         }
 
         if (!res.headersSent) {
-            res.status(500).json({ 
-                error: 'Download failed', 
+            res.status(500).json({
+                error: 'Download failed',
                 details: error.message || 'Unknown error occurred'
             });
         }
