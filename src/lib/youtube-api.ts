@@ -3,6 +3,14 @@ import { enrichVideo } from './viral-score';
 import { getBackendUrl, getAuthHeaders } from './api-config';
 import { logger } from './logger';
 import { SearchFilters } from '@/types/filters';
+import { fetchWithTimeout } from './fetch-utils';
+import type {
+    YouTubeSearchResponse,
+    YouTubeVideoResponse,
+    YouTubeChannelResponse,
+    YouTubePlaylistResponse,
+    YouTubeChannelDetailsResponse
+} from '@/types/youtube-api';
 
 // Wealthy regions to aggregate (US, UK, Canada, Australia, Germany)
 const TARGET_REGIONS = ['US', 'GB', 'CA', 'AU', 'DE'];
@@ -81,7 +89,7 @@ export async function fetchTrendingVideos(
                 url += `&pageToken=${pageTokenMap[region]}`;
             }
 
-            return fetch(url, { headers: getAuthHeaders() }).then(async res => {
+            return fetchWithTimeout(url, { headers: getAuthHeaders(), timeout: 15000 }).then(async res => {
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     const errorMessage = errorData.error?.message || res.statusText || `Status ${res.status}`;
@@ -90,14 +98,12 @@ export async function fetchTrendingVideos(
                     }
                     throw new Error(`YouTube API request failed: ${errorMessage}`);
                 }
-                const data = await res.json();
+                const data: YouTubeSearchResponse = await res.json();
                 // Tag items within the region
-                if (data.items) {
-                    data.items = data.items.map((item: any) => ({ ...item, region }));
-                }
+                const taggedItems = data.items.map(item => ({ ...item, region }));
                 return {
                     region,
-                    items: data.items || [],
+                    items: taggedItems,
                     nextPageToken: data.nextPageToken
                 };
             });
@@ -117,11 +123,11 @@ export async function fetchTrendingVideos(
         const videoIdSet = new Set<string>();
         const regionMap = new Map<string, string>(); // videoId -> region
 
-        searchResults.forEach((data: any) => {
-            data.items.forEach((item: any) => {
+        searchResults.forEach(data => {
+            data.items.forEach(item => {
                 if (!videoIdSet.has(item.id.videoId)) {
                     videoIdSet.add(item.id.videoId);
-                    regionMap.set(item.id.videoId, item.region);
+                    regionMap.set(item.id.videoId, item.region || 'US');
                 }
             });
         });
@@ -133,12 +139,11 @@ export async function fetchTrendingVideos(
         // Limit to 50 videos max for detailed stats call per batch
         const videoIds = Array.from(videoIdSet).slice(0, 50).join(',');
 
-        // Step 2: Fetch detailed video statistics
-        const statsResponse = await fetch(
+        const statsResponse = await fetchWithTimeout(
             `${backendUrl}/api/youtube/videos?` +
             `part=statistics,snippet,contentDetails&` +
             `id=${videoIds}`,
-            { headers: getAuthHeaders() }
+            { headers: getAuthHeaders(), timeout: 15000 }
         );
 
         if (!statsResponse.ok) {
@@ -146,10 +151,10 @@ export async function fetchTrendingVideos(
             throw new Error(`YouTube API statistics request failed: ${errorData.error?.message || statsResponse.statusText}`);
         }
 
-        const statsData = await statsResponse.json();
+        const statsData: YouTubeVideoResponse = await statsResponse.json();
 
         // Step 3: Fetch channel subscriber counts
-        const channelIds = statsData.items.map((item: any) => item.snippet.channelId).join(',');
+        const channelIds = statsData.items.map(item => item.snippet.channelId).join(',');
         const channelResponse = await fetch(
             `${backendUrl}/api/youtube/channels?` +
             `part=statistics&` +
@@ -162,16 +167,16 @@ export async function fetchTrendingVideos(
             throw new Error(`YouTube API channel request failed: ${errorData.error?.message || channelResponse.statusText}`);
         }
 
-        const channelData = await channelResponse.json();
+        const channelData: YouTubeChannelResponse = await channelResponse.json();
 
         // Step 4: Build channel map
-        const channelMap = new Map();
-        channelData.items.forEach((channel: any) => {
+        const channelMap = new Map<string, number>();
+        channelData.items.forEach(channel => {
             channelMap.set(channel.id, parseInt(channel.statistics.subscriberCount || '0'));
         });
 
         // Step 5: Combine data
-        const videos: Video[] = statsData.items.map((item: any) => {
+        const videos: Video[] = statsData.items.map(item => {
             const rawVideo = {
                 id: item.id,
                 title: item.snippet.title,
@@ -213,7 +218,7 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             { headers: getAuthHeaders() }
         );
 
-        const channelData = await channelResponse.json();
+        const channelData: YouTubeChannelDetailsResponse = await channelResponse.json();
         if (!channelData.items || channelData.items.length === 0) return [];
 
         const uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
@@ -227,11 +232,11 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             { headers: getAuthHeaders() }
         );
 
-        const playlistData = await playlistResponse.json();
+        const playlistData: YouTubePlaylistResponse = await playlistResponse.json();
         if (!playlistData.items) return [];
 
         // Map to simplified Video objects (we just need titles/desc for inference)
-        return playlistData.items.map((item: any) => ({
+        return playlistData.items.map(item => ({
             id: item.snippet.resourceId.videoId,
             title: item.snippet.title,
             description: item.snippet.description,

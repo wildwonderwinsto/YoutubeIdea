@@ -34,9 +34,34 @@ export function ApiKeySettings() {
     }, [youtubeKey, geminiKey, preferences.apiKeys]);
 
     const handleSave = () => {
+        // Validate API key formats before saving
+        const trimmedYoutubeKey = youtubeKey.trim();
+        const trimmedGeminiKey = geminiKey.trim();
+
+        // YouTube/Gemini keys should match: AIza + 35 alphanumeric/underscore/hyphen
+        const keyRegex = /^AIza[A-Za-z0-9_-]{35}$/;
+
+        if (trimmedYoutubeKey && !keyRegex.test(trimmedYoutubeKey)) {
+            toast({
+                title: "Invalid YouTube Key",
+                description: "YouTube API keys should start with 'AIza' and be 39 characters long.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (trimmedGeminiKey && !keyRegex.test(trimmedGeminiKey)) {
+            toast({
+                title: "Invalid Gemini Key",
+                description: "Gemini API keys should start with 'AIza' and be 39 characters long.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         updateApiKeys({
-            youtube: youtubeKey.trim(),
-            gemini: geminiKey.trim()
+            youtube: trimmedYoutubeKey,
+            gemini: trimmedGeminiKey
         });
 
         setIsOpen(false);

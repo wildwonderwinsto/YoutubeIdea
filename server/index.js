@@ -60,7 +60,7 @@ const validateYouTubeRequest = (req, res, next) => {
     const { q, maxResults, regionCode } = req.query;
 
     // Validate search query
-    if (q && (typeof q !== 'string' || q.length > 200)) {
+    if (q && (typeof q !== 'string' || q.trim().length < 1 || q.length > 200)) {
         return res.status(400).json({ error: 'Invalid search query' });
     }
 
@@ -80,7 +80,21 @@ const validateYouTubeRequest = (req, res, next) => {
 // Helper for proxying YouTube requests with better error handling
 const proxyYouTubeRequest = (endpoint, req, res) => {
     // Priority: 1. User-provided key (Header) 2. Server env key
-    const apiKey = req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+    // Validate user key format to prevent injection attacks
+    const userKey = req.headers['x-youtube-api-key'];
+    let apiKey;
+
+    if (userKey) {
+        // YouTube API keys are typically 39 characters: AIza + 35 alphanumeric/underscore/hyphen
+        // Example: AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI
+        if (typeof userKey === 'string' && /^AIza[A-Za-z0-9_-]{35}$/.test(userKey)) {
+            apiKey = userKey;
+        } else {
+            return res.status(400).json({ error: 'Invalid API key format' });
+        }
+    } else {
+        apiKey = process.env.YOUTUBE_API_KEY;
+    }
 
     if (!apiKey) {
         return res.status(500).json({ error: 'Server configuration error: YouTube API key missing' });
@@ -130,7 +144,20 @@ const proxyYouTubeRequest = (endpoint, req, res) => {
 // Gemini Proxy Endpoint
 app.post('/api/gemini/generate', async (req, res) => {
     // Priority: 1. User-provided key (Header) 2. Server env key
-    const apiKey = req.headers['x-gemini-api-key'] || process.env.GEMINI_API_KEY;
+    // Validate user key format to prevent injection attacks
+    const userKey = req.headers['x-gemini-api-key'];
+    let apiKey;
+
+    if (userKey) {
+        // Gemini API keys follow same format as YouTube (both are Google APIs)
+        if (typeof userKey === 'string' && /^AIza[A-Za-z0-9_-]{35}$/.test(userKey)) {
+            apiKey = userKey;
+        } else {
+            return res.status(400).json({ error: 'Invalid API key format' });
+        }
+    } else {
+        apiKey = process.env.GEMINI_API_KEY;
+    }
 
     if (!apiKey) {
         return res.status(500).json({ error: 'Gemini API key not configured' });
@@ -289,13 +316,6 @@ app.get('/download', async (req, res) => {
                 errorText.toLowerCase().includes('file is empty')) {
                 hasError = true;
                 errorMessage += 'Downloaded file is empty. This usually means no format matched the selector. ';
-            }
-
-            // Check for empty file error specifically (this is a critical error)
-            if (errorText.toLowerCase().includes('downloaded file is empty') ||
-                errorText.toLowerCase().includes('file is empty')) {
-                hasError = true;
-                errorMessage += 'Downloaded file is empty. Format selector may be too restrictive. ';
             }
 
             // Check for actual errors (not just warnings)
