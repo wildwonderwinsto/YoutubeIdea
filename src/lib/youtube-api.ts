@@ -1,6 +1,6 @@
 import { Video } from '@/types/video';
 import { enrichVideo } from './viral-score';
-import { getBackendUrl } from './api-config';
+import { getBackendUrl, getAuthHeaders } from './api-config';
 import { logger } from './logger';
 import { SearchFilters } from '@/types/filters';
 
@@ -81,7 +81,7 @@ export async function fetchTrendingVideos(
                 url += `&pageToken=${pageTokenMap[region]}`;
             }
 
-            return fetch(url).then(async res => {
+            return fetch(url, { headers: getAuthHeaders() }).then(async res => {
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => ({}));
                     const errorMessage = errorData.error?.message || res.statusText || `Status ${res.status}`;
@@ -137,7 +137,8 @@ export async function fetchTrendingVideos(
         const statsResponse = await fetch(
             `${backendUrl}/api/youtube/videos?` +
             `part=statistics,snippet,contentDetails&` +
-            `id=${videoIds}`
+            `id=${videoIds}`,
+            { headers: getAuthHeaders() }
         );
 
         if (!statsResponse.ok) {
@@ -152,7 +153,8 @@ export async function fetchTrendingVideos(
         const channelResponse = await fetch(
             `${backendUrl}/api/youtube/channels?` +
             `part=statistics&` +
-            `id=${channelIds}`
+            `id=${channelIds}`,
+            { headers: getAuthHeaders() }
         );
 
         if (!channelResponse.ok) {
@@ -207,7 +209,8 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
         const channelResponse = await fetch(
             `${backendUrl}/api/youtube/channels?` +
             `part=contentDetails&` +
-            `id=${channelId}`
+            `id=${channelId}`,
+            { headers: getAuthHeaders() }
         );
 
         const channelData = await channelResponse.json();
@@ -220,7 +223,8 @@ export async function fetchRecentChannelVideos(channelId: string): Promise<Video
             `${backendUrl}/api/youtube/playlistItems?` +
             `part=snippet&` +
             `playlistId=${uploadsPlaylistId}&` +
-            `maxResults=5`
+            `maxResults=5`,
+            { headers: getAuthHeaders() }
         );
 
         const playlistData = await playlistResponse.json();
@@ -308,7 +312,8 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
         let response = await fetch(
             `${backendUrl}/api/youtube/channels?` +
             `part=snippet&` +
-            `id=${extractedId}`
+            `id=${extractedId}`,
+            { headers: getAuthHeaders() }
         );
 
         let data = await response.json();
@@ -318,7 +323,8 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
             response = await fetch(
                 `${backendUrl}/api/youtube/channels?` +
                 `part=snippet&` +
-                `forHandle=${extractedId}`
+                `forHandle=${extractedId}`,
+                { headers: getAuthHeaders() }
             );
             data = await response.json();
         }
@@ -336,5 +342,3 @@ export async function fetchChannelFromURL(channelUrl: string): Promise<{ channel
         return null;
     }
 }
-
-

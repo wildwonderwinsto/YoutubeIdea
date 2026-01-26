@@ -79,7 +79,9 @@ const validateYouTubeRequest = (req, res, next) => {
 
 // Helper for proxying YouTube requests with better error handling
 const proxyYouTubeRequest = (endpoint, req, res) => {
-    const apiKey = process.env.YOUTUBE_API_KEY;
+    // Priority: 1. User-provided key (Header) 2. Server env key
+    const apiKey = req.headers['x-youtube-api-key'] || process.env.YOUTUBE_API_KEY;
+
     if (!apiKey) {
         return res.status(500).json({ error: 'Server configuration error: YouTube API key missing' });
     }
@@ -127,7 +129,9 @@ const proxyYouTubeRequest = (endpoint, req, res) => {
 
 // Gemini Proxy Endpoint
 app.post('/api/gemini/generate', async (req, res) => {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Priority: 1. User-provided key (Header) 2. Server env key
+    const apiKey = req.headers['x-gemini-api-key'] || process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
         return res.status(500).json({ error: 'Gemini API key not configured' });
     }

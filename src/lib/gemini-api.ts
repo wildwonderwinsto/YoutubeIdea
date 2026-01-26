@@ -1,5 +1,5 @@
 import { Video } from '@/types/video';
-import { getBackendUrl } from './api-config';
+import { getBackendUrl, getAuthHeaders } from './api-config';
 import { logger } from './logger';
 
 interface GeminiResponse {
@@ -21,7 +21,7 @@ async function callGeminiAPI(prompt: string, enableSearch: boolean = false): Pro
     try {
         const response = await fetch(`${backendUrl}/api/gemini/generate`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(), // Includes Content-Type and custom keys
             body: JSON.stringify({ prompt, enableSearch })
         });
 
