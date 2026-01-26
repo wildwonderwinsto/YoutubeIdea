@@ -32,10 +32,7 @@ export interface SavedIdea {
 export interface UserPreferences {
     lastNiche: string;
     savedIdeas: SavedIdea[];
-    apiKeys?: {
-        youtube?: string;
-        gemini?: string;
-    };
+
 }
 
 

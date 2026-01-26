@@ -33,7 +33,6 @@ npm install
 ### 2. Get API Keys
 
 #### YouTube Data API v3
-
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
 3. Enable "YouTube Data API v3"
@@ -41,33 +40,33 @@ npm install
 5. Copy the API key
 
 #### Google Gemini API
-
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create an API key
 3. Copy the API key
 
-### 3. Configure Environment Variables
+### 3. Configure Server Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the **server** directory:
 
 ```bash
-cp .env.example .env
+cp server/.env.example server/.env
 ```
 
-Edit `.env` and add your keys:
+Edit `server/.env` and add your keys:
 
 ```env
-VITE_YOUTUBE_API_KEY=your_youtube_api_key_here
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-VITE_DOWNLOAD_SERVER_URL=http://localhost:3000  # Optional: Download server URL (defaults to localhost:3000)
+NODE_ENV=development
+PORT=3000
+YOUTUBE_API_KEY=your_youtube_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+ALLOWED_ORIGINS=http://localhost:5173
 ```
 
 ### 4. Run Servers
 
-You need to run both the backend (for downloads) and frontend (for UI).
+You need to run both the backend (for API proxy & downloads) and frontend (for UI).
 
 **Terminal 1 (Backend):**
-
 ```bash
 cd server
 npm install
@@ -75,12 +74,12 @@ npm start
 ```
 
 **Terminal 2 (Frontend):**
-
 ```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+The app will be available at `http://localhost:5173`.
+The backend runs at `http://localhost:3000`.
 
 ### 5. Build for Production
 
@@ -91,15 +90,29 @@ npm run preview  # Preview production build locally
 
 ## Deployment
 
-### Vercel (Recommended)
+### Backend (Required)
 
-1. Push your code to GitHub
-2. Import the repository in [Vercel](https://vercel.com)
-3. Add environment variables in Vercel dashboard:
-   - `VITE_YOUTUBE_API_KEY`
-   - `VITE_GEMINI_API_KEY`
-   - `VITE_DOWNLOAD_SERVER_URL` (optional, if using download feature)
-4. Deploy
+The backend handles API security and caching. Deploy the `server` folder to a Node.js host like Railway, Render, Fly.io, or Heroku.
+
+**Environment Variables:**
+```env
+NODE_ENV=production
+PORT=3000
+YOUTUBE_API_KEY=your_production_key
+GEMINI_API_KEY=your_production_key
+ALLOWED_ORIGINS=https://your-frontend-domain.com
+```
+
+### Frontend
+
+Deploy to Vercel/Netlify/Cloudflare Pages.
+
+**Environment Variables:**
+```env
+VITE_BACKEND_URL=https://your-backend-domain.com
+```
+
+**Important:** Update `ALLOWED_ORIGINS` in your backend configuration to match your frontend domain!
 
 **Note:** The download server feature requires a separate backend deployment. For production, deploy the `server` folder separately or disable the download feature.
 

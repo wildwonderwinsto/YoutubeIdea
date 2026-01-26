@@ -183,7 +183,18 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', service: 'viral-vision-server' });
+    const hasYoutubeKey = !!process.env.YOUTUBE_API_KEY;
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+
+    res.json({
+        status: hasYoutubeKey && hasGeminiKey ? 'healthy' : 'degraded',
+        service: 'viral-vision-server',
+        timestamp: new Date().toISOString(),
+        apis: {
+            youtube: hasYoutubeKey ? 'configured' : 'missing',
+            gemini: hasGeminiKey ? 'configured' : 'missing'
+        }
+    });
 });
 
 // Download endpoint - uses temp file approach for reliable video+audio merging
