@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader } from './ui/card';
-import { Search, Sparkles } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { SearchFilters } from '@/types/filters';
 import { ApiKeySettings } from './ApiKeySettings';
 
@@ -12,9 +12,10 @@ interface LandingPageProps {
     isLoading: boolean;
     filters: SearchFilters;
     onFilterChange: (filters: SearchFilters) => void;
+    onNavigateToAnalyzer?: () => void;
 }
 
-export function LandingPage({ onSearch, onChannelAnalysis, isLoading }: LandingPageProps) {
+export function LandingPage({ onSearch, onChannelAnalysis, isLoading, onNavigateToAnalyzer }: LandingPageProps) {
     const [nicheInput, setNicheInput] = useState('');
     const [urlInput, setUrlInput] = useState('');
 
@@ -43,10 +44,10 @@ export function LandingPage({ onSearch, onChannelAnalysis, isLoading }: LandingP
         <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-black px-4 py-12">
             {/* Hero Section */}
             <div className="mx-auto max-w-4xl text-center">
-                {/* Logo/Title */}
+                {/* Logo/Title - matching tool card style */}
                 <div className="mb-6 flex items-center justify-center gap-3">
-                    <div className="rounded-full bg-gradient-to-r from-red-500 to-orange-500 p-3">
-                        <Sparkles className="h-8 w-8 text-white" />
+                    <div className="rounded-full bg-gradient-to-br from-red-500 to-orange-500 p-3">
+                        <Search className="h-8 w-8 text-white" />
                     </div>
                     <h1 className="bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 bg-clip-text text-5xl font-black text-transparent">
                         ViralVision
@@ -177,4 +178,4 @@ export function LandingPage({ onSearch, onChannelAnalysis, isLoading }: LandingP
     );
 }
 
- 
+

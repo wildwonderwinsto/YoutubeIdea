@@ -1,14 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient background -->
   <defs>
-    <linearGradient id="gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ef4444" /> <!-- Red-500 -->
-      <stop offset="50%" stop-color="#f97316" /> <!-- Orange-500 -->
-      <stop offset="100%" stop-color="#eab308" /> <!-- Yellow-500 -->
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EF4444;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#F97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EAB308;stop-opacity:1" />
     </linearGradient>
   </defs>
-  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
-  <path d="M20 3v4" />
-  <path d="M22 5h-4" />
-  <path d="M4 17v2" />
-  <path d="M5 18H3" />
+  
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#grad1)"/>
+  
+  <!-- Sparkle icon (simplified) -->
+  <path d="M32 10L34 22L42 20L36 28L46 32L36 36L42 44L34 42L32 54L30 42L22 44L28 36L18 32L28 28L22 20L30 22L32 10Z" fill="white" stroke="white" stroke-width="1"/>
 </svg>

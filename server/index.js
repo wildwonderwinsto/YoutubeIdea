@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -8,6 +9,7 @@ const os = require('os');
 const https = require('https');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
+const { processVideo, generateJobId, getJobStatus } = require('./video-analyzer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -204,9 +206,52 @@ app.post('/api/gemini/generate', async (req, res) => {
 
 // YouTube API Proxy Endpoints with Validation
 app.get('/api/youtube/search', validateYouTubeRequest, (req, res) => proxyYouTubeRequest('search', req, res));
-app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res)); // ID validation is complex, skipping for now
+app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res));
 app.get('/api/youtube/channels', (req, res) => proxyYouTubeRequest('channels', req, res));
 app.get('/api/youtube/playlistItems', (req, res) => proxyYouTubeRequest('playlistItems', req, res));
+
+// Video Analyzer Endpoints
+const upload = multer({
+    dest: 'uploads/',
+    limits: {
+        fileSize: 100 * 1024 * 1024, // 100MB max
+        files: 1
+    },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only video files allowed (.mp4, .mov, .avi, .mkv, .webm)'));
+        }
+    }
+});
+
+app.post('/api/analyze/upload', upload.single('video'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No video file uploaded' });
+    }
+
+    const jobId = generateJobId();
+    const videoPath = req.file.path;
+
+    if (isDevelopment) {
+        console.log(`📹 Video upload: ${req.file.originalname} (${req.file.size} bytes) -> Job ${jobId}`);
+    }
+
+    // Start async processing
+    processVideo(jobId, videoPath).catch(err => {
+        console.error('🚨 Processing failed:', err);
+    });
+
+    res.json({ jobId, status: 'processing' });
+});
+
+app.get('/api/analyze/status/:jobId', (req, res) => {
+    const status = getJobStatus(req.params.jobId);
+    res.json(status);
+});
 
 // Health check
 app.get('/', (req, res) => {
