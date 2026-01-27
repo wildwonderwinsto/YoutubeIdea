@@ -4,6 +4,10 @@ import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { SavedIdeasDialog } from './components/SavedIdeasDialog';
 import { VideoAnalyzer } from './pages/VideoAnalyzer';
+import { ChannelFinder } from './pages/ChannelFinder';
+import { KeywordResearch } from './pages/KeywordResearch';
+import { VideoSimilarity } from './pages/VideoSimilarity';
+import { ThumbnailGenerator } from './pages/ThumbnailGenerator';
 import { Toaster } from './components/ui/use-toast';
 import { toast } from './components/ui/use-toast';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -375,20 +379,20 @@ function App() {
                 <VideoAnalyzer />
             )}
 
-            {/* Coming soon placeholders */}
-            {(appState === 'channel-finder' || appState === 'keyword-tool' || appState === 'video-similarity' || appState === 'thumbnail-generator') && (
-                <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-black px-4">
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold text-white mb-4">Coming Soon!</h2>
-                        <p className="text-gray-400 mb-6">This tool is under development</p>
-                        <button
-                            onClick={() => setAppState('tool-selector')}
-                            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-lg text-white font-medium"
-                        >
-                            ← Back to Tools
-                        </button>
-                    </div>
-                </div>
+            {appState === 'channel-finder' && (
+                <ChannelFinder />
+            )}
+
+            {appState === 'keyword-tool' && (
+                <KeywordResearch />
+            )}
+
+            {appState === 'video-similarity' && (
+                <VideoSimilarity />
+            )}
+
+            {appState === 'thumbnail-generator' && (
+                <ThumbnailGenerator />
             )}
 
             <SavedIdeasDialog

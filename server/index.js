@@ -181,8 +181,28 @@ app.post('/api/gemini/generate', async (req, res) => {
     }
 
     try {
-        // Use fetch (available in node 18+)
-        const response = await fetch(
+        // Retry logic for rate limits (429)
+        const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
+            try {
+                const response = await fetch(url, options);
+
+                if (response.status === 429 && retries > 0) {
+                    console.log(`Gemini 429 (Rate Limit), retrying in ${backoff}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+
+                return response;
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw error;
+            }
+        };
+
+        const response = await fetchWithRetry(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
             {
                 method: 'POST',
@@ -209,6 +229,31 @@ app.get('/api/youtube/search', validateYouTubeRequest, (req, res) => proxyYouTub
 app.get('/api/youtube/videos', (req, res) => proxyYouTubeRequest('videos', req, res));
 app.get('/api/youtube/channels', (req, res) => proxyYouTubeRequest('channels', req, res));
 app.get('/api/youtube/playlistItems', (req, res) => proxyYouTubeRequest('playlistItems', req, res));
+
+// YouTube Autocomplete Proxy (No API Key needed)
+app.get('/api/youtube/autocomplete', async (req, res) => {
+    const query = req.query.q;
+    if (!query) return res.json({ suggestions: [] });
+
+    // YouTube's autocomplete API
+    const url = `https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q=${encodeURIComponent(query)}`;
+
+    try {
+        const response = await fetch(url);
+        const text = await response.text();
+
+        // Parse JSONP response: window.google.ac.h(["query", [["suggestion", 0], ...]])
+        // We need to extract the array inside the callback
+        const jsonStr = text.replace(/^[^[]*/, '').replace(/[^]]*$/, '');
+        const json = JSON.parse(jsonStr);
+        const suggestions = json[1].map(item => item[0]);
+
+        res.json({ suggestions });
+    } catch (error) {
+        console.error('Autocomplete fetch failed:', error);
+        res.status(500).json({ error: 'Autocomplete fetch failed' });
+    }
+});
 
 // Video Analyzer Endpoints
 const upload = multer({

@@ -14,7 +14,9 @@
         "express-rate-limit": "^8.2.1",
         "morgan": "^1.10.1",
         "multer": "^2.0.2",
-        "youtube-dl-exec": "^2.5.8"
+        "youtube-dl-exec": "^2.5.8",
+        "ffmpeg-static": "^5.2.0",
+        "ffprobe-static": "^3.1.0"
     },
     "devDependencies": {
         "nodemon": "^3.0.3"

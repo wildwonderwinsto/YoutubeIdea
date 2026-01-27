@@ -29,7 +29,7 @@ const tools = [
         description: 'Find similar channels based on a YouTube channel URL',
         icon: Users,
         color: 'from-purple-500 to-pink-500',
-        badge: 'COMING SOON'
+        badge: 'NEW'
     },
     {
         id: 'keyword-tool' as const,
@@ -37,7 +37,7 @@ const tools = [
         description: 'Find trending keywords and topics in your niche',
         icon: Hash,
         color: 'from-green-500 to-teal-500',
-        badge: 'COMING SOON'
+        badge: 'NEW'
     },
     {
         id: 'video-similarity' as const,
@@ -45,7 +45,7 @@ const tools = [
         description: 'Find videos similar to a specific YouTube video',
         icon: Video,
         color: 'from-yellow-500 to-amber-500',
-        badge: 'COMING SOON'
+        badge: 'NEW'
     },
     {
         id: 'thumbnail-generator' as const,
@@ -53,7 +53,7 @@ const tools = [
         description: 'Create eye-catching thumbnails with AI-powered design suggestions',
         icon: Image,
         color: 'from-cyan-500 to-blue-500',
-        badge: 'COMING SOON'
+        badge: 'NEW'
     }
 ];
 

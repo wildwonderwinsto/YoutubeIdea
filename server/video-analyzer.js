@@ -1,72 +1,13 @@
-const { spawn } = require('child_process');
-const fs = require('fs').promises;
-const path = require('path');
+const ffmpegPath = require('ffmpeg-static');
+const ffprobePath = require('ffprobe-static').path;
 
-// Simple in-memory job store (TODO: upgrade to database for persistence)
-const jobs = new Map();
-
-function generateJobId() {
-    return `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-async function processVideo(jobId, videoPath) {
-    try {
-        updateJobStatus(jobId, { status: 'processing', progress: 5, step: 'Validating video' });
-
-        // 1. Get video duration first
-        const duration = await getVideoDuration(videoPath);
-        updateJobStatus(jobId, { status: 'processing', progress: 10, step: 'Extracting audio', duration });
-
-        // 2. Extract audio
-        const audioPath = await extractAudio(videoPath);
-        updateJobStatus(jobId, { status: 'processing', progress: 20, step: 'Transcribing with Whisper (this takes 10-20 min)' });
-
-        // 3. Transcribe with Whisper (Python API)
-        const transcript = await transcribeWithWhisper(audioPath);
-        updateJobStatus(jobId, { status: 'processing', progress: 60, step: 'Detecting scene changes' });
-
-        // 4. Detect scenes
-        const scenes = await detectScenes(videoPath);
-        updateJobStatus(jobId, { status: 'processing', progress: 75, step: 'Analyzing audio features' });
-
-        // 5. Audio analysis with silence detection
-        const audioFeatures = await analyzeAudioFeatures(videoPath);
-        updateJobStatus(jobId, { status: 'processing', progress: 85, step: 'Running AI analysis with Gemini' });
-
-        // 6. Analyze with Gemini
-        const { buildAnalysisPrompt } = require('./prompts/video-analysis-prompt');
-        const prompt = buildAnalysisPrompt({
-            transcript,
-            scenes,
-            audioFeatures,
-            duration
-        });
-
-        const analysis = await analyzeWithGemini(prompt);
-        updateJobStatus(jobId, { status: 'complete', progress: 100, result: analysis });
-
-        // Cleanup temporary files
-        await fs.unlink(videoPath).catch(() => { });
-        await fs.unlink(audioPath).catch(() => { });
-
-    } catch (error) {
-        console.error(`Job ${jobId} failed:`, error);
-        updateJobStatus(jobId, {
-            status: 'error',
-            error: error.message,
-            errorStack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
-
-        // Cleanup on error
-        await fs.unlink(videoPath).catch(() => { });
-    }
-}
+// ... (rest of imports)
 
 async function extractAudio(videoPath) {
     const audioPath = videoPath.replace(/\.[^.]+$/, '.wav');
 
     return new Promise((resolve, reject) => {
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-i', videoPath,
             '-vn', // no video
             '-acodec', 'pcm_s16le',
@@ -218,7 +159,7 @@ async function detectSilence(videoPath) {
         const silenceRanges = [];
 
         // Detect silence: noise threshold -40dB, min duration 0.5s
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-i', videoPath,
             '-af', 'silencedetect=noise=-40dB:d=0.5',
             '-f', 'null',
@@ -258,7 +199,7 @@ async function detectSilence(videoPath) {
 
 async function getVideoDuration(videoPath) {
     return new Promise((resolve, reject) => {
-        const ffprobe = spawn('ffprobe', [
+        const ffprobe = spawn(ffprobePath, [
             '-v', 'error',
             '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1',
