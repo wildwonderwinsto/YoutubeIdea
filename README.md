@@ -146,7 +146,7 @@ The backend requires `ffmpeg` and `yt-dlp` for video downloads. We use Docker to
 
 ### Verify Deployment
 
-- **Backend Health**: Visit `https://your-backend.onrender.com/health`
+- **Backend Health**: Visit `https://your-backend.onrender.com/health` (server supports local fallbacks so it can run without paid API keys — see `server/README.md` for details)
   - Should return: `{"status":"healthy","apis":{"youtube":"configured","gemini":"configured"}}`
 - **Frontend**: Visit your Vercel URL and try a search
 

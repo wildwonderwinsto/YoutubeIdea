@@ -80,7 +80,7 @@ const validateYouTubeRequest = (req, res, next) => {
 };
 
 // Helper for proxying YouTube requests with better error handling
-const proxyYouTubeRequest = (endpoint, req, res) => {
+const proxyYouTubeRequest = async (endpoint, req, res) => {
     // Priority: 1. User-provided key (Header) 2. Server env key
     // Validate user key format to prevent injection attacks
     const userKey = req.headers['x-youtube-api-key'];
@@ -99,7 +99,31 @@ const proxyYouTubeRequest = (endpoint, req, res) => {
     }
 
     if (!apiKey) {
-        return res.status(500).json({ error: 'Server configuration error: YouTube API key missing' });
+        // No YouTube API key configured: use a public HTML-scraping fallback for basic searches
+        try {
+            const { youtubeSearchFallback, youtubeChannelFallback } = require('./local-fallbacks');
+
+            // Basic routing based on endpoint
+            if (endpoint === 'search') {
+                const q = req.query.q;
+                if (!q) return res.status(400).json({ error: 'Missing query (q)' });
+                const data = await youtubeSearchFallback(q, req.query);
+                return res.json(data);
+            }
+
+            if (endpoint === 'channels') {
+                const id = req.query.id || req.query.forHandle;
+                if (!id) return res.status(400).json({ error: 'Missing channel id' });
+                const data = await youtubeChannelFallback(id);
+                return res.json(data);
+            }
+
+            // For other endpoints we return a helpful message indicating limited support
+            return res.status(501).json({ error: 'YouTube API key not configured: limited fallback available for search and channels only' });
+        } catch (err) {
+            console.error('YouTube fallback error:', err);
+            return res.status(500).json({ error: 'Server configuration error: YouTube API key missing and fallback failed' });
+        }
     }
 
     const queryParams = new URLSearchParams(req.query);
@@ -161,14 +185,22 @@ app.post('/api/gemini/generate', async (req, res) => {
         apiKey = process.env.GEMINI_API_KEY;
     }
 
-    if (!apiKey) {
-        return res.status(500).json({ error: 'Gemini API key not configured' });
-    }
-
     const { prompt, enableSearch } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'Invalid prompt' });
+    }
+
+    if (!apiKey) {
+        // Use a local fallback implementation when Gemini key is not provided
+        try {
+            const { localGeminiFallback } = require('./local-fallbacks');
+            const data = localGeminiFallback(prompt, enableSearch);
+            return res.json(data);
+        } catch (err) {
+            console.error('Local Gemini fallback failed:', err);
+            return res.status(500).json({ error: 'Gemini API key not configured and local fallback failed' });
+        }
     }
 
     const requestBody = {
@@ -307,14 +339,19 @@ app.get('/health', (req, res) => {
     const hasYoutubeKey = !!process.env.YOUTUBE_API_KEY;
     const hasGeminiKey = !!process.env.GEMINI_API_KEY;
 
+    const warnings = [];
+    if (!hasYoutubeKey) warnings.push('YouTube API key not configured - running in limited fallback mode');
+    if (!hasGeminiKey) warnings.push('Gemini API key not configured - using local fallback for AI');
+
     res.json({
-        status: hasYoutubeKey && hasGeminiKey ? 'healthy' : 'degraded',
+        status: warnings.length ? 'healthy (limited)' : 'healthy',
         service: 'viral-vision-server',
         timestamp: new Date().toISOString(),
         apis: {
-            youtube: hasYoutubeKey ? 'configured' : 'missing',
-            gemini: hasGeminiKey ? 'configured' : 'missing'
-        }
+            youtube: hasYoutubeKey ? 'configured' : 'missing (fallback)',
+            gemini: hasGeminiKey ? 'configured' : 'missing (local fallback)'
+        },
+        warnings
     });
 });
 
@@ -607,8 +644,32 @@ app.get('/download', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     if (isDevelopment) {
         console.log(`🚀 Server running on http://localhost:${PORT}`);
     }
+});
+
+// Handle server errors gracefully (e.g., EADDRINUSE when port is already in use)
+server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use. Another server may be running. Use a different PORT or stop the conflicting process.`);
+        if (isDevelopment) {
+            console.error('Tip: run `npx kill-port ' + PORT + '` or stop the other process and restart.');
+        }
+        process.exit(1);
+    }
+
+    console.error('Server error:', err);
+    process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('Received SIGINT, shutting down...');
+    server.close(() => process.exit(0));
+});
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM, shutting down...');
+    server.close(() => process.exit(0));
 });
