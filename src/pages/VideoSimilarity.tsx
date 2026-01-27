@@ -18,12 +18,33 @@ export function VideoSimilarity() {
     const [videoUrl, setVideoUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<RelatedVideo[]>([]);
-    const [targetVideoId, setTargetVideoId] = useState<string | null>(null);
 
     const extractVideoId = (url: string) => {
+        // Standard URLs
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
         const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : null;
+        if (match && match[2].length === 11) {
+            return match[2];
+        }
+
+        // Shorts URLs (e.g., youtube.com/shorts/VIDEO_ID)
+        const shortsMatch = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+        if (shortsMatch) {
+            return shortsMatch[1];
+        }
+
+        // Mobile URLs (m.youtube.com)
+        const mobileMatch = url.match(/m\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+        if (mobileMatch) {
+            return mobileMatch[1];
+        }
+
+        // Direct video ID (if user pastes just the ID)
+        if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) {
+            return url.trim();
+        }
+
+        return null;
     };
 
     const handleSearch = async () => {
@@ -33,7 +54,6 @@ export function VideoSimilarity() {
             return;
         }
 
-        setTargetVideoId(id);
         setIsLoading(true);
         setResults([]);
 
@@ -61,7 +81,6 @@ export function VideoSimilarity() {
     const handleBack = () => {
         setResults([]);
         setVideoUrl('');
-        setTargetVideoId(null);
     };
 
     return (
@@ -116,7 +135,7 @@ export function VideoSimilarity() {
                                 <Input
                                     value={videoUrl}
                                     onChange={(e) => setVideoUrl(e.target.value)}
-                                    placeholder="e.g., https://www.youtube.com/watch?v=..."
+                                    placeholder="e.g., https://youtube.com/watch?v=... or https://youtube.com/shorts/..."
                                     className="bg-gray-800 border-gray-700 text-white"
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 />

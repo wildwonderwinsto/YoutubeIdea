@@ -1,101 +1,87 @@
-/**
- * Video analysis prompt for Gemini AI
- * Analyzes video content against viral YouTube principles
- */
-
-const ANALYSIS_PROMPT = `You are an expert YouTube content strategist trained on practices of top creators like MrBeast, Ali Abdaal, and others. Analyze the provided video data and output specific, actionable editing instructions.
-
-**VIRAL PRINCIPLES:**
-- YouTube rewards viewer satisfaction: strong CTR, high retention, watch time
-- Viral videos have: bold concept, curiosity-driven packaging, powerful hook (first 3-10s), fast pacing, emotional moments, strong CTAs
+const ANALYSIS_PROMPT = `You are an expert YouTube content strategist. Analyze this video data and provide specific, actionable feedback.
 
 **VIDEO DATA:**
 
 TRANSCRIPT:
 {transcript}
 
-SCENES (cut timestamps in seconds):
+SCENES (timestamps in seconds):
 {scenes}
 
-AUDIO FEATURES:
+AUDIO:
 - Mean volume: {meanVolume} dB
-- Max volume: {maxVolume} dB
+- Max volume: {maxVolume} dB  
 - Has silence: {hasSilence}
-- Duration: {duration}s
+- Total duration: {duration}s
 
-**YOUR TASKS:**
+**YOUR ANALYSIS:**
 
-1. **Structural Analysis:**
-   - Identify hook (0-30s)
-   - Identify sections: intro, body, climax, outro
-   - Flag boring segments (>7s, no cuts, low energy)
+Provide a JSON response with this EXACT structure (no markdown, no backticks):
 
-2. **Viral Readiness Score (0-100):**
-   - Overall score + justification
-
-3. **Subscores (0-10 each):**
-   - Hook Strength
-   - Pacing & Flow
-   - Visual Variety
-   - Emotional Impact
-   - Clarity of Value
-   - CTAs & Engagement
-
-4. **Edit Plan (CapCut-style):**
-   For each important timestamp range, provide specific editing instructions.
-
-5. **Packaging:**
-   - 3 title ideas (curiosity-driven, clear benefit)
-   - 2 thumbnail concepts
-   - Target audience description
-
-**CRITICAL: Respond with valid JSON only. No backticks, no markdown, no explanatory text outside the JSON object.**
-
-The JSON must match this exact schema:
 {
-  "biggestProblem": "string",
-  "viralScore": number,
+  "biggestProblem": "One sentence describing the main issue holding this video back",
+  "viralScore": 75,
   "subscores": {
-    "hook": { "score": number, "why": "string" },
-    "pacing": { "score": number, "why": "string" },
-    "visualVariety": { "score": number, "why": "string" },
-    "emotionalImpact": { "score": number, "why": "string" },
-    "clarity": { "score": number, "why": "string" },
-    "ctas": { "score": number, "why": "string" }
+    "hook": { "score": 8, "why": "Brief explanation" },
+    "pacing": { "score": 7, "why": "Brief explanation" },
+    "visualVariety": { "score": 6, "why": "Brief explanation" },
+    "emotionalImpact": { "score": 7, "why": "Brief explanation" },
+    "clarity": { "score": 9, "why": "Brief explanation" },
+    "ctas": { "score": 5, "why": "Brief explanation" }
   },
   "editPlan": [
-    { 
-      "timestamp": "string (e.g., '[0:00-0:15]')", 
-      "action": "string", 
-      "visual": "string", 
-      "audio": "string", 
-      "goal": "string" 
+    {
+      "timestamp": "[0:00-0:15]",
+      "action": "Cut the intro to 10 seconds",
+      "visual": "Add text overlay with video hook",
+      "audio": "Boost music by 3dB, duck when speaking",
+      "goal": "Grab attention in first 3 seconds"
     }
   ],
   "packaging": {
-    "titles": ["string", "string", "string"],
-    "thumbnails": ["string", "string"],
-    "audience": ["string", "string", "string"]
+    "titles": [
+      "Title idea 1 (curiosity-driven)",
+      "Title idea 2 (benefit-focused)",
+      "Title idea 3 (controversial angle)"
+    ],
+    "thumbnails": [
+      "Concept 1: Close-up face with surprised expression, bright red background",
+      "Concept 2: Before/after split screen with bold text overlay"
+    ],
+    "audience": ["Target demographic 1", "Target demographic 2", "Target demographic 3"]
   },
-  "checklist": ["string", "string", "string", "string", "string"]
-}`;
+  "checklist": [
+    "Check 1",
+    "Check 2",
+    "Check 3",
+    "Check 4",
+    "Check 5"
+  ]
+}
+
+CRITICAL RULES:
+1. Scores are 0-10 (subscores) or 0-100 (viral score)
+2. Edit plan should have 5-8 actionable items covering the full video
+3. Be specific with timestamps
+4. Focus on retention, pacing, and emotional impact
+5. Respond with ONLY valid JSON - no explanatory text outside the JSON object`;
 
 function buildAnalysisPrompt(data) {
-    const transcriptText = data.transcript && data.transcript.length > 0
-        ? data.transcript.map(seg => `[${seg.start.toFixed(1)}s] ${seg.text}`).join('\n')
-        : 'No transcript available';
+  const transcriptText = data.transcript && data.transcript.length > 0
+    ? data.transcript.map(seg => `[${seg.start.toFixed(1)}s] ${seg.text}`).join('\n')
+    : 'No transcript available (silent video or transcription failed)';
 
-    const scenesText = data.scenes && data.scenes.length > 0
-        ? data.scenes.map(s => s.toFixed(1)).join(', ')
-        : 'No scene data';
+  const scenesText = data.scenes && data.scenes.length > 0
+    ? data.scenes.map(s => s.toFixed(1)).join(', ')
+    : 'No scene changes detected';
 
-    return ANALYSIS_PROMPT
-        .replace('{transcript}', transcriptText)
-        .replace('{scenes}', scenesText)
-        .replace('{meanVolume}', data.audioFeatures?.meanVolume?.toFixed(1) || 'N/A')
-        .replace('{maxVolume}', data.audioFeatures?.maxVolume?.toFixed(1) || 'N/A')
-        .replace('{hasSilence}', data.audioFeatures?.hasSilence ? 'Yes' : 'No')
-        .replace('{duration}', data.duration?.toFixed(1) || '0');
+  return ANALYSIS_PROMPT
+    .replace('{transcript}', transcriptText)
+    .replace('{scenes}', scenesText)
+    .replace('{meanVolume}', data.audioFeatures?.meanVolume?.toFixed(1) || 'N/A')
+    .replace('{maxVolume}', data.audioFeatures?.maxVolume?.toFixed(1) || 'N/A')
+    .replace('{hasSilence}', data.audioFeatures?.hasSilence ? 'Yes' : 'No')
+    .replace('{duration}', data.duration?.toFixed(1) || '0');
 }
 
 module.exports = { buildAnalysisPrompt };

@@ -65,7 +65,11 @@ async function processVideo(jobId, videoPath) {
 }
 
 async function extractAudio(videoPath) {
-    const audioPath = videoPath.replace(/\.[^.]+$/, '.wav');
+    // FIX: Ensure output path has .wav extension
+    // If no extension exists, append .wav; otherwise replace extension
+    const audioPath = videoPath.includes('.')
+        ? videoPath.replace(/\.[^.]+$/, '.wav')
+        : videoPath + '.wav';
 
     return new Promise((resolve, reject) => {
         const ffmpeg = spawn(ffmpegPath, [
@@ -74,10 +78,14 @@ async function extractAudio(videoPath) {
             '-acodec', 'pcm_s16le',
             '-ar', '16000', // 16kHz sample rate for speech
             '-ac', '1', // mono
+            '-y', // overwrite output file if it exists
             audioPath
         ]);
 
+        let stderrOutput = '';
+
         ffmpeg.stderr.on('data', (data) => {
+            stderrOutput += data.toString();
             // Log progress if needed
             if (process.env.NODE_ENV === 'development') {
                 console.log('FFmpeg audio:', data.toString());
@@ -85,11 +93,16 @@ async function extractAudio(videoPath) {
         });
 
         ffmpeg.on('close', code => {
-            if (code === 0) resolve(audioPath);
-            else reject(new Error(`FFmpeg audio extraction failed with code ${code}`));
+            if (code === 0) {
+                resolve(audioPath);
+            } else {
+                reject(new Error(`FFmpeg audio extraction failed with code ${code}: ${stderrOutput}`));
+            }
         });
 
-        ffmpeg.on('error', reject);
+        ffmpeg.on('error', (err) => {
+            reject(new Error(`FFmpeg spawn error: ${err.message}`));
+        });
     });
 }
 
@@ -99,7 +112,10 @@ async function transcribeWithWhisper(audioPath) {
         let stderr = '';
 
         // Call Python script that uses Whisper API
-        const whisper = spawn('python3', [
+        // Use 'python' instead of 'python3' for Windows compatibility
+        const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+
+        const whisper = spawn(pythonCommand, [
             path.join(__dirname, 'whisper_transcribe.py'),
             audioPath,
             'base' // model size
@@ -144,7 +160,7 @@ async function detectScenes(videoPath) {
     return new Promise((resolve, reject) => {
         const scenes = [];
 
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-i', videoPath,
             '-filter:v', 'select=gt(scene\\,0.4),showinfo',
             '-f', 'null',
@@ -189,7 +205,7 @@ async function getVolumeStats(videoPath) {
     return new Promise((resolve, reject) => {
         let volumeData = '';
 
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-i', videoPath,
             '-af', 'volumedetect',
             '-f', 'null',
@@ -289,8 +305,49 @@ async function analyzeWithGemini(prompt) {
         throw new Error('GEMINI_API_KEY not configured');
     }
 
-    const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const fetchWithRetry = async (url, options, retries = 5, backoff = 2000) => {
+        try {
+            const response = await fetch(url, options);
+
+            if (response.status === 429) {
+                if (retries <= 0) return response;
+
+                let waitTime = backoff;
+                try {
+                    // Try to parse retry delay from error body
+                    const errorBody = await response.clone().json();
+                    const details = errorBody.error?.details || [];
+                    const retryInfo = details.find(d => d['@type']?.includes('RetryInfo'));
+
+                    if (retryInfo?.retryDelay) {
+                        const seconds = parseFloat(retryInfo.retryDelay.replace('s', ''));
+                        if (!isNaN(seconds)) {
+                            console.log(`Gemini requested wait time: ${seconds}s`);
+                            waitTime = Math.ceil(seconds * 1000) + 2000; // Add 2s buffer
+                        }
+                    }
+                } catch (e) {
+                    // Ignore parsing error, stick to exponential backoff
+                }
+
+                console.log(`Gemini 429 (Rate Limit), retrying in ${waitTime}ms... (Retries left: ${retries})`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                return fetchWithRetry(url, options, retries - 1, waitTime > backoff ? backoff : backoff * 2);
+            }
+
+            return response;
+        } catch (error) {
+            if (retries > 0) {
+                console.log(`Fetch error: ${error.message}, retrying in ${backoff}ms...`);
+                await new Promise(resolve => setTimeout(resolve, backoff));
+                return fetchWithRetry(url, options, retries - 1, backoff * 2);
+            }
+            throw error;
+        }
+    };
+
+    const response = await fetchWithRetry(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -299,10 +356,12 @@ async function analyzeWithGemini(prompt) {
                 generationConfig: {
                     temperature: 0.4,
                     maxOutputTokens: 4096,
-                    responseMimeType: 'application/json' // Request JSON response
+                    responseMimeType: 'application/json'
                 }
             })
-        }
+        },
+        5, // Max retries
+        5000 // Initial backoff
     );
 
     if (!response.ok) {

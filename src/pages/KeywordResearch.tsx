@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Hash, TrendingUp, ArrowLeft, Loader2, Copy } from 'lucide-react';
+import { Hash, TrendingUp, ArrowLeft, Loader2, Copy, Sparkles } from 'lucide-react';
 import { generateKeywords, analyzeKeywords, generateTags, KeywordAnalysis } from '@/lib/keyword-research-api';
 import { toast } from '@/components/ui/use-toast';
 import { ApiKeySettings } from '@/components/ApiKeySettings';
@@ -15,6 +15,10 @@ export function KeywordResearch() {
     const [generatedTags, setGeneratedTags] = useState<string[]>([]);
     const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
+    // Bulk actions state
+    const [selectedKeywords, setSelectedKeywords] = useState<Set<string>>(new Set());
+    const [showOptimized, setShowOptimized] = useState(false);
+
     const handleSearch = async () => {
         if (!topicInput.trim()) return;
 
@@ -22,6 +26,8 @@ export function KeywordResearch() {
         setStatus('Finding long-tail keywords...');
         setResults([]);
         setGeneratedTags([]);
+        setSelectedKeywords(new Set());
+        setSelectedKeyword(null);
 
         try {
             // 1. Generate keywords via autocomplete
@@ -55,6 +61,9 @@ export function KeywordResearch() {
     const handleBack = () => {
         setResults([]);
         setTopicInput('');
+        setSelectedKeywords(new Set());
+        setGeneratedTags([]);
+        setSelectedKeyword(null);
     };
 
     const handleGenerateTags = (keyword: string) => {
@@ -66,6 +75,47 @@ export function KeywordResearch() {
     const copyTags = () => {
         navigator.clipboard.writeText(generatedTags.join(', '));
         toast({ title: 'Tags copied to clipboard' });
+    };
+
+    // Bulk Actions
+    const toggleKeyword = (keyword: string) => {
+        const newSet = new Set(selectedKeywords);
+        if (newSet.has(keyword)) {
+            newSet.delete(keyword);
+        } else {
+            newSet.add(keyword);
+        }
+        setSelectedKeywords(newSet);
+    };
+
+    const selectAll = () => {
+        setSelectedKeywords(new Set(results.map(r => r.keyword)));
+    };
+
+    const clearSelection = () => {
+        setSelectedKeywords(new Set());
+    };
+
+    const getOptimizedKeywords = () => {
+        return results.filter(k => k.viralPotential >= 70 && k.saturation === 'Low');
+    };
+
+    const copySelected = () => {
+        const keywords = Array.from(selectedKeywords);
+        navigator.clipboard.writeText(keywords.join(', '));
+        toast({
+            title: 'Copied!',
+            description: `${keywords.length} keywords copied to clipboard`
+        });
+    };
+
+    const copyOptimized = () => {
+        const optimized = getOptimizedKeywords().map(k => k.keyword);
+        navigator.clipboard.writeText(optimized.join(', '));
+        toast({
+            title: 'Optimized keywords copied!',
+            description: `${optimized.length} high-potential keywords`
+        });
     };
 
     const getScoreColor = (score: number) => {
@@ -103,7 +153,7 @@ export function KeywordResearch() {
                         </Button>
                     )}
 
-                    {/* Branding - Matching Hash Icon */}
+                    {/* Branding */}
                     <div className="mb-6 flex items-center justify-center gap-3">
                         <div className="rounded-full bg-gradient-to-br from-green-500 to-teal-500 p-3">
                             <Hash className="h-8 w-8 text-white" />
@@ -159,36 +209,105 @@ export function KeywordResearch() {
 
                         {/* Left: Keyword List */}
                         <div className="lg:col-span-2 space-y-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5 text-green-400" />
-                                Top Opportunities
-                            </h3>
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <TrendingUp className="h-5 w-5 text-green-400" />
+                                    Top Opportunities
+                                </h3>
+                            </div>
+
+                            {/* Bulk Actions Bar */}
+                            <div className="flex flex-wrap items-center justify-between gap-4 mb-4 bg-gray-900/40 p-3 rounded-lg border border-gray-800">
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={selectAll}
+                                        className="text-gray-300 hover:text-white"
+                                    >
+                                        All ({results.length})
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={clearSelection}
+                                        disabled={selectedKeywords.size === 0}
+                                        className="text-gray-300 hover:text-white"
+                                    >
+                                        None
+                                    </Button>
+                                    <div className="h-4 w-px bg-gray-700 mx-2" />
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowOptimized(!showOptimized)}
+                                        className={showOptimized ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'border-gray-700'}
+                                    >
+                                        {showOptimized ? 'Show Best Only' : 'Show All'}
+                                    </Button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        onClick={copySelected}
+                                        disabled={selectedKeywords.size === 0}
+                                        className="bg-teal-600 hover:bg-teal-700 h-8"
+                                    >
+                                        <Copy className="mr-2 h-3 w-3" />
+                                        Copy ({selectedKeywords.size})
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={copyOptimized}
+                                        className="bg-green-600 hover:bg-green-700 h-8"
+                                    >
+                                        <Sparkles className="mr-2 h-3 w-3" />
+                                        Copy Best
+                                    </Button>
+                                </div>
+                            </div>
 
                             <div className="grid gap-3">
-                                {results.map((item, idx) => (
+                                {(showOptimized ? getOptimizedKeywords() : results).map((item, idx) => (
                                     <div
                                         key={idx}
-                                        onClick={() => handleGenerateTags(item.keyword)}
                                         className={`
-                                            p-4 rounded-xl border cursor-pointer transition-all
-                                            ${selectedKeyword === item.keyword
+                                            p-4 rounded-xl border transition-all
+                                            ${selectedKeywords.has(item.keyword)
                                                 ? 'bg-teal-950/30 border-teal-500 ring-1 ring-teal-500'
-                                                : 'bg-gray-900/50 border-gray-800 hover:border-teal-500/30'
+                                                : selectedKeyword === item.keyword
+                                                    ? 'bg-teal-950/20 border-teal-500/50'
+                                                    : 'bg-gray-900/50 border-gray-800 hover:border-teal-500/30'
                                             }
                                         `}
                                     >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="font-semibold text-white text-lg">{item.keyword}</h4>
-                                            <div className={`px-2 py-0.5 rounded text-xs font-medium border ${getSaturationColor(item.saturation)}`}>
-                                                {item.saturation} Comp.
-                                            </div>
-                                        </div>
+                                        <div className="flex items-start gap-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedKeywords.has(item.keyword)}
+                                                onChange={() => toggleKeyword(item.keyword)}
+                                                className="mt-1.5 h-4 w-4 rounded border-gray-700 bg-gray-800 text-teal-600 focus:ring-teal-500 focus:ring-offset-gray-900 cursor-pointer"
+                                            />
 
-                                        <div className="flex items-center justify-between text-sm">
-                                            <p className="text-gray-400">{item.reasoning}</p>
-                                            <div className="flex items-center gap-1 font-bold pl-4 border-l border-gray-700 ml-4">
-                                                <span className={getScoreColor(item.viralPotential)}>{item.viralPotential}</span>
-                                                <span className="text-gray-500">/100</span>
+                                            <div
+                                                className="flex-1 cursor-pointer"
+                                                onClick={() => handleGenerateTags(item.keyword)}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h4 className="font-semibold text-white text-lg">{item.keyword}</h4>
+                                                    <div className={`px-2 py-0.5 rounded text-xs font-medium border ${getSaturationColor(item.saturation)}`}>
+                                                        {item.saturation} Comp.
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <p className="text-gray-400">{item.reasoning}</p>
+                                                    <div className="flex items-center gap-1 font-bold pl-4 border-l border-gray-700 ml-4">
+                                                        <span className={getScoreColor(item.viralPotential)}>{item.viralPotential}</span>
+                                                        <span className="text-gray-500">/100</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -214,7 +333,7 @@ export function KeywordResearch() {
                                                     <p className="text-white font-medium">{selectedKeyword}</p>
                                                 </div>
 
-                                                <div className="bg-black/40 rounded-lg p-3 mb-4 min-h-[100px] text-sm text-gray-300">
+                                                <div className="bg-black/40 rounded-lg p-3 mb-4 min-h-[100px] text-sm text-gray-300 font-mono">
                                                     {generatedTags.join(', ')}
                                                 </div>
 
