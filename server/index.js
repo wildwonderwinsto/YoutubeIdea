@@ -487,6 +487,7 @@ app.get('/download', async (req, res) => {
             '--no-mtime', // Don't set file modification time
             '--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy', // Copy streams without re-encoding (faster)
             '--ffmpeg-location', ffmpegLocation,
+            '--js-runtimes', 'node', // Use Node.js for YouTube JS extraction (available in container)
             '-o', tempFilePath, // Output to temp file
             videoUrl
         ];
@@ -497,6 +498,7 @@ app.get('/download', async (req, res) => {
             '--no-playlist',
             '--no-mtime',
             '--ffmpeg-location', ffmpegLocation,
+            '--js-runtimes', 'node', // Use Node.js for YouTube JS extraction
             '-o', tempFilePath,
             videoUrl
         ];
