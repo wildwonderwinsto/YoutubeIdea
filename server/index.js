@@ -391,6 +391,17 @@ app.get('/download', async (req, res) => {
     // Log which yt-dlp binary we're planning to use (always log for visibility in production)
     console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
 
+    // If the runtime provides a system-level standalone yt-dlp (downloaded in Dockerfile), prefer it
+    try {
+        const systemBinary = '/usr/local/bin/yt-dlp';
+        if (fs.existsSync(systemBinary)) {
+            console.log(`Found system yt-dlp at ${systemBinary}, preferring system binary.`);
+            ytDlpBinary = systemBinary;
+        }
+    } catch (e) {
+        // ignore
+    }
+
     // If the packaged binary is missing (possible in some build flows), fall back to system binaries
     try {
         const { existsSync } = require('fs');

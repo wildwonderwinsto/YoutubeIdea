@@ -8,7 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install standalone yt-dlp binary (no Python runtime required) so downloads
+# work even if system Python is older than yt-dlp's minimum. Place it in PATH.
+RUN curl -L -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    && chmod +x /usr/local/bin/yt-dlp
 
 # Install CPU-friendly PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
 # Use a torch version that has prebuilt wheels across common Python versions
