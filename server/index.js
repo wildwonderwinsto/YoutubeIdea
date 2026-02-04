@@ -385,8 +385,26 @@ app.get('/download', async (req, res) => {
         ytDlpBinary = path.join(__dirname, 'node_modules', 'youtube-dl-exec', 'bin', 'yt-dlp');
     }
 
-    if (isDevelopment) {
-        console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
+    // Log which yt-dlp binary we're planning to use (always log for visibility in production)
+    console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
+
+    // If the packaged binary is missing (possible in some build flows), fall back to system binaries
+    try {
+        const { existsSync } = require('fs');
+        if (!existsSync(ytDlpBinary)) {
+            console.warn(`Packaged yt-dlp binary not found at ${ytDlpBinary}. Falling back to system 'yt-dlp' or 'youtube-dl'.`);
+            // Prefer 'yt-dlp' in PATH, otherwise try 'youtube-dl'
+            ytDlpBinary = 'yt-dlp';
+            const which = require('child_process').spawnSync('which', [ytDlpBinary]);
+            if (which.status !== 0) {
+                ytDlpBinary = 'youtube-dl';
+                console.warn("'yt-dlp' not found in PATH, falling back to 'youtube-dl'.");
+            } else {
+                console.log("Using 'yt-dlp' from PATH.");
+            }
+        }
+    } catch (e) {
+        console.warn('Error detecting yt-dlp binary fallback:', e && e.message);
     }
 
     // Determine ffmpeg binary location. Prefer bundled ffmpeg-static, fall back to system ffmpeg.
@@ -505,12 +523,17 @@ app.get('/download', async (req, res) => {
 
         // Try primary, then fallback on failure
         try {
+            console.log('Starting primary yt-dlp download (bestvideo+bestaudio)...');
             await runWithClientClose(primaryArgs);
+            console.log('Primary yt-dlp download succeeded');
         } catch (primaryErr) {
-            if (isDevelopment) console.warn('Primary yt-dlp attempt failed, trying fallback (best)...', primaryErr.message);
+            console.warn('Primary yt-dlp attempt failed, trying fallback (best)...', primaryErr && primaryErr.message);
             try {
+                console.log('Starting fallback yt-dlp download (best progressive)...');
                 await runWithClientClose(fallbackArgs);
+                console.log('Fallback yt-dlp download succeeded');
             } catch (fallbackErr) {
+                console.error('Both yt-dlp attempts failed:', fallbackErr && fallbackErr.message);
                 throw fallbackErr;
             }
         }
@@ -611,14 +634,13 @@ app.get('/download', async (req, res) => {
             }
         }
 
-        if (isDevelopment) {
-            console.error('❌ Download error:', error);
-        }
+        // Always log download errors for production visibility
+        console.error('❌ Download error:', error && (error.stack || error.message || error));
 
         if (!res.headersSent) {
             res.status(500).json({
                 error: 'Download failed',
-                details: error.message || 'Unknown error occurred'
+                details: (error && (error.message || String(error))) || 'Unknown error occurred'
             });
         }
     }
