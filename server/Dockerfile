@@ -22,7 +22,7 @@ RUN curl -L -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/l
 # Install CPU-friendly PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
 # Use a torch version that has prebuilt wheels across common Python versions
 ENV CUDA_VISIBLE_DEVICES=""
-RUN python3.11 -m pip install --no-cache-dir \
+RUN python3.11 -m pip install --no-cache-dir --break-system-packages \
     torch==2.0.1 \
     openai-whisper==20231117 \
     numpy
