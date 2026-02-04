@@ -15,6 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+// When running behind a proxy (Render, Vercel), trust the proxy so
+// express-rate-limit can identify client IPs correctly from X-Forwarded-For
+app.set('trust proxy', true);
+
 // Security: CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
 const corsOptions = {
@@ -383,16 +387,50 @@ app.get('/download', async (req, res) => {
 
     if (isDevelopment) {
         console.log(`Using yt-dlp binary at: ${ytDlpBinary} (platform: ${platform})`);
-
-        // Check if ffmpeg is available (needed for merging video+audio)
-        const { execSync } = require('child_process');
-        try {
-            execSync('ffmpeg -version', { stdio: 'ignore' });
-            console.log('✅ ffmpeg is available for video+audio merging');
-        } catch (e) {
-            console.warn('⚠️ WARNING: ffmpeg not found! Video+audio merging may fail. Install ffmpeg for proper downloads.');
-        }
     }
+
+    // Determine ffmpeg binary location. Prefer bundled ffmpeg-static, fall back to system ffmpeg.
+    let ffmpegLocation = 'ffmpeg';
+    try {
+        const ffmpegStatic = require('ffmpeg-static');
+        if (ffmpegStatic) ffmpegLocation = ffmpegStatic;
+    } catch (e) {
+        // ffmpeg-static not available; we'll rely on system ffmpeg
+    }
+
+    // Helper to run yt-dlp with given args and capture stderr for error analysis
+    const runYtDlp = (args) => {
+        return new Promise((resolve, reject) => {
+            const proc = spawn(ytDlpBinary, args);
+            let hasError = false;
+            let errorMessage = '';
+
+            proc.stderr.on('data', (data) => {
+                const text = data.toString();
+                if (isDevelopment) console.log(`yt-dlp: ${text}`);
+
+                if (text.toLowerCase().includes('downloaded file is empty') || text.toLowerCase().includes('file is empty')) {
+                    hasError = true;
+                    errorMessage += 'Downloaded file is empty. This usually means no format matched the selector. ';
+                }
+
+                if (text.toLowerCase().includes('error') || text.toLowerCase().includes('unable') || text.toLowerCase().includes('failed') || text.toLowerCase().includes('unavailable')) {
+                    hasError = true;
+                    errorMessage += text;
+                }
+            });
+
+            proc.on('close', (code) => {
+                if (code !== 0 || hasError) {
+                    reject(new Error(errorMessage || `yt-dlp exited with code ${code}`));
+                } else {
+                    resolve();
+                }
+            });
+
+            proc.on('error', (err) => reject(err));
+        });
+    };
 
     // Sanitize filename for use in Content-Disposition header
     const sanitizedFilename = filename
@@ -407,15 +445,8 @@ app.get('/download', async (req, res) => {
 
     try {
         // Download to temp file with proper format selection
-        // Format priority: 
-        // 1. Progressive formats (already have video+audio merged) - preferred
-        // 2. bestvideo+bestaudio (will be merged with ffmpeg)
-        // This ensures we get audio even if merge fails
-        // Format selector: Prioritize formats with both video AND audio
-        // Strategy: Use bestvideo+bestaudio which ensures we get both streams
-        // yt-dlp will merge them automatically if ffmpeg is available
-        // Fallback to best if merge fails (but best might be video-only, so not ideal)
-        const ytDlp = spawn(ytDlpBinary, [
+        // Primary strategy: bestvideo+bestaudio (merged by ffmpeg). Fallback: progressive 'best' format.
+        const primaryArgs = [
             '-f', 'bestvideo+bestaudio/best',
             '--merge-output-format', 'mp4',
             '--no-check-certificate',
@@ -423,117 +454,66 @@ app.get('/download', async (req, res) => {
             '--prefer-free-formats',
             '--no-mtime', // Don't set file modification time
             '--postprocessor-args', 'ffmpeg:-c:v copy -c:a copy', // Copy streams without re-encoding (faster)
+            '--ffmpeg-location', ffmpegLocation,
             '-o', tempFilePath, // Output to temp file
             videoUrl
-        ]);
+        ];
 
-        let hasError = false;
-        let errorMessage = '';
+        const fallbackArgs = [
+            '-f', 'best',
+            '--no-check-certificate',
+            '--no-playlist',
+            '--no-mtime',
+            '--ffmpeg-location', ffmpegLocation,
+            '-o', tempFilePath,
+            videoUrl
+        ];
 
-        // Collect stderr for error messages and format info
-        ytDlp.stderr.on('data', (data) => {
-            const errorText = data.toString();
-            if (isDevelopment) {
-                // Log all stderr output to see what format is being selected
-                console.log(`yt-dlp: ${errorText}`);
-            }
-
-            // Check for empty file error specifically
-            if (errorText.toLowerCase().includes('downloaded file is empty') ||
-                errorText.toLowerCase().includes('file is empty')) {
-                hasError = true;
-                errorMessage += 'Downloaded file is empty. This usually means no format matched the selector. ';
-            }
-
-            // Check for actual errors (not just warnings)
-            if (errorText.toLowerCase().includes('error') ||
-                errorText.toLowerCase().includes('unable') ||
-                errorText.toLowerCase().includes('failed') ||
-                errorText.toLowerCase().includes('unavailable')) {
-                hasError = true;
-                errorMessage += errorText;
-            }
-
-            // Log format and merge information
-            if (errorText.toLowerCase().includes('merging formats') ||
-                errorText.toLowerCase().includes('ffmpeg') ||
-                errorText.toLowerCase().includes('postprocessor') ||
-                errorText.toLowerCase().includes('deleting original file')) {
-                // These are info messages about the merge process
-                if (isDevelopment) {
-                    console.log(`ℹ️ ${errorText.trim()}`);
-                }
-            }
-
-            // Check for merge failures
-            if (errorText.toLowerCase().includes('error merging') ||
-                errorText.toLowerCase().includes('merge failed') ||
-                errorText.toLowerCase().includes('ffmpeg not found') ||
-                errorText.toLowerCase().includes('ffmpeg is not installed')) {
-                hasError = true;
-                errorMessage += `Merge error: ${errorText}. Make sure ffmpeg is installed and in PATH. `;
-            }
-
-            // Check if it's downloading video-only (no audio)
-            if (errorText.toLowerCase().includes('video only') ||
-                errorText.toLowerCase().includes('only video')) {
-                if (isDevelopment) {
-                    console.warn(`⚠️ Warning: Video-only format detected. Audio may be missing.`);
-                }
-            }
-        });
-
-        // Wait for download to complete
-        await new Promise((resolve, reject) => {
-            const onClose = () => {
-                ytDlp.kill();
-                if (fs.existsSync(tempFilePath)) {
-                    try {
-                        fs.unlinkSync(tempFilePath);
-                    } catch (e) {
-                        // Ignore cleanup errors
-                    }
-                }
-                if (isDevelopment) {
-                    console.log('🚫 Client disconnected during YouTube download');
-                }
-                reject(new Error('Client disconnected'));
-            };
-
-            req.on('close', onClose);
-
-            ytDlp.on('close', (code) => {
-                req.off('close', onClose); // Remove listener so it doesn't fire during streaming
-
-                if (code !== 0 || hasError) {
-                    // Clean up temp file on error
+        // Helper that wires request.close handling into the proc lifecycle
+        const runWithClientClose = (args) => {
+            return new Promise((resolve, reject) => {
+                const proc = spawn(ytDlpBinary, args);
+                let cleanupOnClose = () => {
+                    try { proc.kill(); } catch (e) {}
                     if (fs.existsSync(tempFilePath)) {
-                        try {
-                            fs.unlinkSync(tempFilePath);
-                        } catch (e) {
-                            // Ignore cleanup errors
-                        }
+                        try { fs.unlinkSync(tempFilePath); } catch (e) {}
                     }
-                    reject(new Error(errorMessage || `yt-dlp exited with code ${code}`));
-                } else {
-                    resolve();
-                }
-            });
+                    reject(new Error('Client disconnected'));
+                };
 
-            ytDlp.on('error', (error) => {
-                req.off('close', onClose);
+                req.on('close', cleanupOnClose);
 
-                // Clean up temp file on error
-                if (fs.existsSync(tempFilePath)) {
-                    try {
-                        fs.unlinkSync(tempFilePath);
-                    } catch (e) {
-                        // Ignore cleanup errors
+                proc.stderr.on('data', (data) => {
+                    if (isDevelopment) console.log(`yt-dlp: ${data.toString()}`);
+                });
+
+                proc.on('close', (code) => {
+                    req.off('close', cleanupOnClose);
+                    if (code !== 0) {
+                        reject(new Error(`yt-dlp exited with code ${code}`));
+                    } else {
+                        resolve();
                     }
-                }
-                reject(error);
+                });
+
+                proc.on('error', (err) => {
+                    req.off('close', cleanupOnClose);
+                    reject(err);
+                });
             });
-        });
+        };
+
+        // Try primary, then fallback on failure
+        try {
+            await runWithClientClose(primaryArgs);
+        } catch (primaryErr) {
+            if (isDevelopment) console.warn('Primary yt-dlp attempt failed, trying fallback (best)...', primaryErr.message);
+            try {
+                await runWithClientClose(fallbackArgs);
+            } catch (fallbackErr) {
+                throw fallbackErr;
+            }
+        }
 
         // Check if file exists and has content
         if (!fs.existsSync(tempFilePath)) {

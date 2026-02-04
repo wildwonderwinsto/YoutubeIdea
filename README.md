@@ -229,6 +229,45 @@ The app blocks analysis of:
 - The niche may be too specific—try a broader keyword
 - Click example niches to test the app functionality
 
+## Deployment
+
+### Vercel + Render Setup (Production)
+
+For the full app to work on Vercel + Render, the frontend needs to know where the backend is deployed.
+
+#### Step 1: Deploy Backend to Render
+1. Push your code to GitHub
+2. Create a new Web Service on [Render](https://render.com)
+3. Connect your GitHub repo
+4. Set the root directory to `server`
+5. Set the start command to `npm start`
+6. Copy your Render service URL (e.g., `https://myapp-xyz.onrender.com`)
+
+#### Step 2: Configure Frontend on Vercel
+1. Deploy to Vercel (or use `npm run build` locally)
+2. In Vercel project settings → Environment Variables, add:
+   - **Name**: `VITE_BACKEND_URL`
+   - **Value**: Your Render backend URL (e.g., `https://myapp-xyz.onrender.com`)
+3. Redeploy to apply the environment variable
+
+#### Example .env.production (Vercel)
+```env
+# Backend URL for production (set in Vercel dashboard)
+VITE_BACKEND_URL=https://myapp-xyz.onrender.com
+```
+
+**Note**: Never commit `.env.production` with real URLs. Use Vercel's Environment Variables UI instead.
+
+### Video Download Issues
+
+If downloads fail with "Make sure the backend server is running on port 3000":
+
+1. ✅ Verify the backend is running on Render (check logs)
+2. ✅ Check that `VITE_BACKEND_URL` is set in Vercel environment
+3. ✅ Make sure the Render backend URL has no trailing slash (e.g., `https://myapp.onrender.com` not `https://myapp.onrender.com/`)
+4. ✅ Clear browser cache and refresh the page
+5. ✅ Check browser DevTools → Network tab to see if requests are reaching the backend
+
 ## License
 
 MIT License - feel free to use for personal or commercial projects.

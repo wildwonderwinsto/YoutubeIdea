@@ -139,8 +139,9 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                             setIsDownloading(true);
 
                             try {
-                                // Get download server URL from environment or default to localhost for dev
-                                const downloadServerUrl = import.meta.env.VITE_DOWNLOAD_SERVER_URL || 'http://localhost:3000';
+                                // Get download server URL from environment or fallback to the main backend URL
+                                // Prefer an explicit `VITE_DOWNLOAD_SERVER_URL`, otherwise use `VITE_BACKEND_URL`.
+                                const downloadServerUrl = import.meta.env.VITE_DOWNLOAD_SERVER_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
                                 
                                 // Sanitize filename for URL
                                 const sanitizedTitle = video.title
