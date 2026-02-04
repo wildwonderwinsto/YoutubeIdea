@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
-# Pinning avoids triton/torch backtracking and prevents compilation on minimal containers
+# Install CPU-friendly PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
+# Use a torch version that has prebuilt wheels across common Python versions
+ENV CUDA_VISIBLE_DEVICES=""
 RUN pip3 install --no-cache-dir \
-    torch==2.1.2+cpu \
-    -f https://download.pytorch.org/whl/cpu \
+    torch==2.0.1 \
     openai-whisper==20231117 \
     numpy
 
