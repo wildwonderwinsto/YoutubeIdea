@@ -1,6 +1,6 @@
 # server/Dockerfile
-# Use a Debian-based slim image so PyTorch CPU wheels (manylinux) install cleanly
-FROM node:18-bullseye-slim
+# Use Debian Bookworm slim image for Python 3.11 support (yt-dlp requires 3.10+)
+FROM node:18-bookworm-slim
 
 # Install FFmpeg, Python, pip, and minimal build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
