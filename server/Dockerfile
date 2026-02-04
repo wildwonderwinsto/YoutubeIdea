@@ -5,21 +5,24 @@ FROM node:18-bullseye-slim
 # Install FFmpeg, Python, pip, and minimal build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    python3 \
+    python3.11 \
+    python3.11-venv \
     python3-pip \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install standalone yt-dlp binary (no Python runtime required) so downloads
-# work even if system Python is older than yt-dlp's minimum. Place it in PATH.
+# Update default python3 to use python3.11 (required for yt-dlp)
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+# Install standalone yt-dlp binary (the zipapp requires Python 3.10+)
 RUN curl -L -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
     && chmod +x /usr/local/bin/yt-dlp
 
 # Install CPU-friendly PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
 # Use a torch version that has prebuilt wheels across common Python versions
 ENV CUDA_VISIBLE_DEVICES=""
-RUN pip3 install --no-cache-dir \
+RUN python3.11 -m pip install --no-cache-dir \
     torch==2.0.1 \
     openai-whisper==20231117 \
     numpy
