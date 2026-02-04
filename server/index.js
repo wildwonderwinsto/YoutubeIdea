@@ -19,6 +19,8 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 // Use a numeric value (1) instead of `true` to avoid express-rate-limit's
 // permissive-trust-proxy validation error while still honoring X-Forwarded-For.
 app.set('trust proxy', 1);
+// Log effective trust proxy value for debugging in production
+console.log(`Express trust proxy value: ${app.get('trust proxy')}`);
 
 // Security: CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
@@ -491,6 +493,7 @@ app.get('/download', async (req, res) => {
         // Helper that wires request.close handling into the proc lifecycle
         const runWithClientClose = (args) => {
             return new Promise((resolve, reject) => {
+                console.log('Spawning yt-dlp with args:', args.join(' '));
                 const proc = spawn(ytDlpBinary, args);
                 let cleanupOnClose = () => {
                     try { proc.kill(); } catch (e) {}
