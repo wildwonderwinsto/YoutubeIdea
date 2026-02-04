@@ -1,16 +1,10 @@
-import { getBackendUrl } from './api-config';
+import { getBackendUrl, getAuthHeaders } from './api-config';
 
 export interface KeywordAnalysis {
     keyword: string;
     viralPotential: number; // 0-100
     saturation: 'Low' | 'Medium' | 'High';
     reasoning: string;
-}
-
-// Helper to get auth headers with API key
-function getAuthHeaders() {
-    const customKey = localStorage.getItem('gemini_api_key');
-    return customKey ? { 'x-api-key': customKey } : {};
 }
 
 export async function generateKeywords(baseTopic: string): Promise<string[]> {
@@ -79,7 +73,7 @@ Do not include markdown formatting or backticks.`;
     try {
         const response = await fetch(`${backendUrl}/api/gemini/generate`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...headers },
+            headers,
             body: JSON.stringify({ prompt })
         });
 

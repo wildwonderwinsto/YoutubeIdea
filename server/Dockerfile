@@ -1,19 +1,21 @@
 # server/Dockerfile
-FROM node:18-alpine
+# Use a Debian-based slim image so PyTorch CPU wheels (manylinux) install cleanly
+FROM node:18-bullseye-slim
 
-# Install FFmpeg, Python, and system dependencies
-RUN apk update && \
-    apk add --no-cache \
+# Install FFmpeg, Python, pip, and minimal build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     python3 \
-    py3-pip \
-    gcc \
-    musl-dev \
-    python3-dev
+    python3-pip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Whisper and its dependencies
-RUN pip3 install --break-system-packages --no-cache-dir \
-    openai-whisper \
+# Install CPU-only PyTorch and a pinned Whisper version to avoid dependency resolution conflicts on Render
+# Pinning avoids triton/torch backtracking and prevents compilation on minimal containers
+RUN pip3 install --no-cache-dir \
+    torch==2.1.2+cpu \
+    -f https://download.pytorch.org/whl/cpu \
+    openai-whisper==20231117 \
     numpy
 
 WORKDIR /app

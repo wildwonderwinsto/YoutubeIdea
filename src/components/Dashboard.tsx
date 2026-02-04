@@ -5,8 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Lightbulb, TrendingUp, BarChart3, BookOpen, Home, Bookmark, Sparkles, Loader2 } from 'lucide-react';
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useState, useEffect } from 'react';
+
+// Recharts is large; load it dynamically only when the Graph tab is viewed to keep the initial bundle small
+type RechartsModule = typeof import('recharts');
 import { generateWhyItWorksExplanation } from '@/lib/gemini-api';
 
 import { SearchFilters } from '@/types/filters';
@@ -117,6 +119,32 @@ export function Dashboard({
             title: v.title.length > 60 ? v.title.slice(0, 57) + '...' : v.title,
             id: v.id,
         }));
+
+    // Dynamic import for recharts to avoid adding it to the initial bundle
+    const [recharts, setRecharts] = useState<RechartsModule | null>(null);
+    const [isLoadingCharts, setIsLoadingCharts] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadCharts = async () => {
+            if (activeTab !== 'graph' || recharts) return;
+            setIsLoadingCharts(true);
+            try {
+                const mod = await import('recharts');
+                if (!cancelled) setRecharts(mod as RechartsModule);
+            } catch (e) {
+                console.error('Failed to load charts', e);
+            } finally {
+                if (!cancelled) setIsLoadingCharts(false);
+            }
+        };
+
+        loadCharts();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeTab, recharts]);
 
     // Load explanations for strategy feed
     useEffect(() => {
@@ -349,57 +377,72 @@ export function Dashboard({
                                 </p>
                             </CardHeader>
                             <CardContent>
-                                <ResponsiveContainer width="100%" height={400}>
-                                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                        <XAxis
-                                            dataKey="length"
-                                            name="Length"
-                                            type="number"
-                                            stroke="#9ca3af"
-                                            tickFormatter={(value) => {
-                                                const minutes = Math.floor(value / 60);
-                                                const seconds = value % 60;
-                                                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                                            }}
-                                            label={{ value: 'Video Length (mm:ss)', position: 'insideBottom', offset: -10, fill: '#9ca3af' }}
-                                        />
-                                        <YAxis
-                                            dataKey="avdTier"
-                                            name="AVD Tier"
-                                            type="number"
-                                            domain={[0, 110]}
-                                            ticks={[30, 60, 100]}
-                                            tickFormatter={(value) => value === 30 ? 'Low' : value === 60 ? 'Medium' : 'High'}
-                                            stroke="#9ca3af"
-                                            width={50}
-                                        />
-                                        <Tooltip
-                                            content={({ active, payload }: any) => {
-                                                if (active && payload && payload.length) {
-                                                    const data = payload[0].payload;
-                                                    return (
-                                                        <div className="rounded-lg border border-white/10 bg-gray-900 p-3 shadow-lg">
-                                                            <p className="mb-1 font-semibold text-white">{data.title}</p>
-                                                            <p className="text-sm text-gray-300">Length: {data.length}s</p>
-                                                            <p className="text-sm text-gray-300">Viral Score: {data.viralScore.toFixed(0)}/100</p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <Scatter data={graphData}>
-                                            {graphData.map((entry, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={entry.viralScore > 70 ? '#ef4444' : entry.viralScore > 50 ? '#f59e0b' : '#6b7280'}
-                                                    r={4 + (entry.viralScore / 10)}
-                                                />
-                                            ))}
-                                        </Scatter>
-                                    </ScatterChart>
-                                </ResponsiveContainer>
+                                {isLoadingCharts && (
+                                    <div className="flex h-96 items-center justify-center">
+                                        <Loader2 className="mr-2 h-6 w-6 animate-spin text-gray-300" />
+                                        <span className="text-gray-300">Loading charts...</span>
+                                    </div>
+                                )}
+
+                                {!isLoadingCharts && !recharts && (
+                                    <div className="flex h-96 items-center justify-center">
+                                        <p className="text-gray-400">Charts are available after opening the Graph tab.</p>
+                                    </div>
+                                )}
+
+                                {!isLoadingCharts && recharts && (
+                                    <recharts.ResponsiveContainer width="100%" height={400}>
+                                        <recharts.ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                            <recharts.CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <recharts.XAxis
+                                                dataKey="length"
+                                                name="Length"
+                                                type="number"
+                                                stroke="#9ca3af"
+                                                tickFormatter={(value: number) => {
+                                                    const minutes = Math.floor(value / 60);
+                                                    const seconds = value % 60;
+                                                    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                                                }}
+                                                label={{ value: 'Video Length (mm:ss)', position: 'insideBottom', offset: -10, fill: '#9ca3af' }}
+                                            />
+                                            <recharts.YAxis
+                                                dataKey="avdTier"
+                                                name="AVD Tier"
+                                                type="number"
+                                                domain={[0, 110]}
+                                                ticks={[30, 60, 100]}
+                                                tickFormatter={(value: number) => value === 30 ? 'Low' : value === 60 ? 'Medium' : 'High'}
+                                                stroke="#9ca3af"
+                                                width={50}
+                                            />
+                                            <recharts.Tooltip
+                                                content={({ active, payload }: any) => {
+                                                    if (active && payload && payload.length) {
+                                                        const data = payload[0].payload;
+                                                        return (
+                                                            <div className="rounded-lg border border-white/10 bg-gray-900 p-3 shadow-lg">
+                                                                <p className="mb-1 font-semibold text-white">{data.title}</p>
+                                                                <p className="text-sm text-gray-300">Length: {data.length}s</p>
+                                                                <p className="text-sm text-gray-300">Viral Score: {data.viralScore.toFixed(0)}/100</p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <recharts.Scatter data={graphData}>
+                                                {graphData.map((entry, index) => (
+                                                    <recharts.Cell
+                                                        key={`cell-${index}`}
+                                                        fill={entry.viralScore > 70 ? '#ef4444' : entry.viralScore > 50 ? '#f59e0b' : '#6b7280'}
+                                                        r={4 + (entry.viralScore / 10)}
+                                                    />
+                                                ))}
+                                            </recharts.Scatter>
+                                        </recharts.ScatterChart>
+                                    </recharts.ResponsiveContainer>
+                                )}
                             </CardContent>
                         </Card>
 

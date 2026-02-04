@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Users, Search, TrendingUp, Calendar, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Users, TrendingUp, Calendar, ArrowRight, ArrowLeft } from 'lucide-react';
 import { analyzeChannel, extractChannelId } from '@/lib/channel-finder-api';
-import { SimilarChannel, ChannelAnalysis } from '@/types/channel';
+import { ChannelAnalysis } from '@/types/channel';
 import { toast } from '@/components/ui/use-toast';
 import { ApiKeySettings } from '@/components/ApiKeySettings';
 

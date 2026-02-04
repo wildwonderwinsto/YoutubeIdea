@@ -159,6 +159,14 @@ export function LandingPage({ onSearch, onChannelAnalysis, isLoading, onNavigate
                     </div>
                 </div>
 
+                {onNavigateToAnalyzer && (
+                    <div className="mt-6 flex justify-center">
+                        <Button variant="ghost" size="sm" onClick={onNavigateToAnalyzer} className="text-gray-300 hover:text-white">
+                            Go to Analyzer
+                        </Button>
+                    </div>
+                )}
+
                 {/* Footer Disclaimer */}
                 <div className="mt-12 space-y-2 text-xs text-gray-500">
                     <p className="flex items-center justify-center gap-1">

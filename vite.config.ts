@@ -22,10 +22,21 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom'],
-          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-tabs', '@radix-ui/react-toast'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            try {
+              const parts = id.split('node_modules/')[1].split('/');
+              // Handle scoped packages like @radix-ui/react-dialog
+              const pkg = parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
+              // Normalize chunk name
+              const safeName = pkg.replace('@', '').replace('/', '-');
+              return `vendor-${safeName}`;
+            } catch (e) {
+              return 'vendor';
+            }
+          }
         },
+        chunkFileNames: 'assets/[name]-[hash].js',
       },
     },
   },
