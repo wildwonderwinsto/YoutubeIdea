@@ -15,9 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-// When running behind a proxy (Render, Vercel), trust the proxy so
-// express-rate-limit can identify client IPs correctly from X-Forwarded-For
-app.set('trust proxy', true);
+// When running behind a proxy (Render, Vercel), trust the first proxy hop
+// Use a numeric value (1) instead of `true` to avoid express-rate-limit's
+// permissive-trust-proxy validation error while still honoring X-Forwarded-For.
+app.set('trust proxy', 1);
 
 // Security: CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
@@ -501,14 +502,18 @@ app.get('/download', async (req, res) => {
 
                 req.on('close', cleanupOnClose);
 
-                proc.stderr.on('data', (data) => {
-                    if (isDevelopment) console.log(`yt-dlp: ${data.toString()}`);
-                });
+                        let stderrAccum = '';
+                        proc.stderr.on('data', (data) => {
+                            const text = data.toString();
+                            stderrAccum += text;
+                            if (isDevelopment) console.log(`yt-dlp: ${text}`);
+                        });
 
                 proc.on('close', (code) => {
                     req.off('close', cleanupOnClose);
                     if (code !== 0) {
-                        reject(new Error(`yt-dlp exited with code ${code}`));
+                        const msg = stderrAccum.trim() || `yt-dlp exited with code ${code}`;
+                        reject(new Error(msg));
                     } else {
                         resolve();
                     }
