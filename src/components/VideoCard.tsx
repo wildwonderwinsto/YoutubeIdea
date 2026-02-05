@@ -50,7 +50,7 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
             )}
 
             {/* Thumbnail */}
-            <div className="relative aspect-video w-full overflow-hidden bg-gray-900">
+            <div className="relative aspect-video w-full overflow-hidden bg-black">
                 <img
                     src={thumbnailUrl}
                     alt={video.title}
@@ -142,25 +142,25 @@ export function VideoCard({ video, onSave, isSaved }: VideoCardProps) {
                                 // Get download server URL from environment or fallback to the main backend URL
                                 // Prefer an explicit `VITE_DOWNLOAD_SERVER_URL`, otherwise use `VITE_BACKEND_URL`.
                                 const downloadServerUrl = import.meta.env.VITE_DOWNLOAD_SERVER_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-                                
+
                                 // Sanitize filename for URL
                                 const sanitizedTitle = video.title
                                     .replace(/[^a-z0-9]/gi, '_')
                                     .substring(0, 100)
                                     .toLowerCase() || 'video';
-                                
+
                                 const downloadUrl = `${downloadServerUrl}/download?url=${encodeURIComponent(youtubeUrl)}&filename=${encodeURIComponent(sanitizedTitle)}`;
 
                                 // Use fetch to download the file with proper filename handling
                                 const response = await fetch(downloadUrl);
-                                
+
                                 if (!response.ok) {
                                     throw new Error(`Download failed: ${response.statusText}`);
                                 }
 
                                 // Get the blob from the response
                                 const blob = await response.blob();
-                                
+
                                 // Create a blob URL and trigger download
                                 const blobUrl = window.URL.createObjectURL(blob);
                                 const a = document.createElement('a');

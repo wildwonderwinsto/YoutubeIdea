@@ -1,6 +1,8 @@
-import { Film, Search, Users, Hash, Video, Image } from 'lucide-react';
+import { Film, Search, Users, Hash, Video, Image, Download } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { ApiKeySettings } from './ApiKeySettings';
+import { Button } from './ui/button';
+import { toast } from './ui/use-toast';
 
 interface ToolSelectorProps {
     onSelectTool: (tool: 'niche-finder' | 'video-analyzer' | 'channel-finder' | 'keyword-tool' | 'video-similarity' | 'thumbnail-generator') => void;
@@ -58,10 +60,33 @@ const tools = [
 ];
 
 export function ToolSelector({ onSelectTool }: ToolSelectorProps) {
+    const handleDownload = () => {
+        // Trigger download of the installer located in public/ViralVision-Setup.exe
+        const link = document.createElement('a');
+        link.href = '/ViralVision-Setup.exe';
+        link.download = 'ViralVision-Setup.exe';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({
+            title: "Download Started",
+            description: "Your installer is downloading...",
+        });
+    };
+
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-black px-4 py-12">
-            {/* Settings in top-right */}
-            <div className="fixed top-6 right-6">
+            {/* Settings and Download in top-right */}
+            <div className="fixed top-6 right-6 flex items-center gap-3 z-50">
+                <Button
+                    variant="outline"
+                    className="hidden sm:flex border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    onClick={handleDownload}
+                >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download App
+                </Button>
                 <ApiKeySettings />
             </div>
 

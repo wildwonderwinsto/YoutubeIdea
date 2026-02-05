@@ -4,6 +4,7 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './', // Use relative paths for Electron
   plugins: [react()],
   resolve: {
     alias: {
@@ -41,5 +42,5 @@ export default defineConfig({
     },
   },
 })
- 
- 
+
+

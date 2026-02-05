@@ -56,12 +56,29 @@ export function isOutlierVideo(video: Video): boolean {
 }
 
 /**
+ * Calculates a score based on View/Subscriber Ratio
+ * Ratio > 1.0 (More views than subs) is excellent for long-form
+ */
+export function calculateViewSubRatioScore(views: number, subscribers: number): number {
+    if (subscribers < 100) return 50; // New channel bias
+    const ratio = views / Math.max(subscribers, 1);
+
+    // Cap ratio at 10x for max points to avoid skewing too hard
+    const score = Math.min(ratio * 10, 100);
+    return score;
+}
+
+/**
  * Main viral score calculation following the weighted formula:
  * Viral Score = 
  *   (Estimated AVD Tier × 0.35) +
  *   (Engagement Rate × 100 × 0.30) +
  *   (Recency Multiplier × 100 × 0.20) +
  *   (Small Channel Boost × 0.15)
+ * 
+ * UPDATED LOGIC for Better Outlier Detection:
+ * - Increases weight of View/Sub ratio
+ * - Penalizes massive channels slightly to let small outliers shine
  */
 export function calculateViralScore(video: Omit<Video, 'viralScore' | 'engagementRate' | 'estimatedAVDTier' | 'isOutlier' | 'recencyMultiplier' | 'smallChannelBoost'>): number {
     // 1. Estimated AVD Tier (0-100 scale)
@@ -78,17 +95,43 @@ export function calculateViralScore(video: Omit<Video, 'viralScore' | 'engagemen
     const recencyMultiplier = calculateRecencyMultiplier(video.publishedAt);
     const recencyScore = recencyMultiplier * 100;
 
-    // 4. Small Channel Boost
-    const channelBoost = calculateSmallChannelBoost(video.subscriberCount);
-    const boostScore = Math.min(channelBoost, 20); // Cap contribution at 20 points
+    // 4. View/Sub Ratio (The Outlier Factor)
+    const ratioScore = calculateViewSubRatioScore(video.views, video.subscriberCount);
 
-    // Weighted Calculation
-    const viralScore = (
-        (avdScore * 0.35) +
-        (engagementScore * 0.30) +
-        (recencyScore * 0.20) +
-        (boostScore * 0.15)
-    );
+    // 5. Small Channel Boost (Legacy factor, kept for broader small channel support)
+    const channelBoost = calculateSmallChannelBoost(video.subscriberCount);
+
+    // --- WEIGHTING ---
+    // If video is Long Form (> 60s), we prioritize Ratio and Small Channel heavily
+    const isLongForm = video.lengthSeconds > 60;
+
+    let viralScore = 0;
+
+    if (isLongForm) {
+        // Long Form Formula: Heavy on Outlier Metrics
+        viralScore = (
+            (avdScore * 0.20) +          // Quality signal
+            (engagementScore * 0.15) +   // Interaction signal
+            (recencyScore * 0.10) +      // Freshness
+            (ratioScore * 0.35) +        // PRIMARY: Views vs Subs
+            (channelBoost * 0.20)        // SECONDARY: Small channel bias
+        );
+
+        // Large Channel Dampener for Long Form
+        // If subs > 500k and Ratio < 0.5, dampen score to hide "average" big channel uploads
+        if (video.subscriberCount > 500000 && (video.views / video.subscriberCount) < 0.5) {
+            viralScore *= 0.6;
+        }
+
+    } else {
+        // Shorts Formula: Standard Viral Signals (High Velocity)
+        viralScore = (
+            (avdScore * 0.40) +
+            (engagementScore * 0.30) +
+            (recencyScore * 0.20) +
+            (channelBoost * 0.10)
+        );
+    }
 
     return Math.min(viralScore, 100);
 }

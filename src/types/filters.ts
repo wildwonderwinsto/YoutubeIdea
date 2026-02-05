@@ -1,6 +1,6 @@
 export type RegionCode = 'ALL' | 'US' | 'GB' | 'CA' | 'AU' | 'DE';
 export type DurationType = 'ALL' | 'SHORT' | 'MEDIUM' | 'LONG';
-export type DateRange = '24h' | '7d' | '30d';
+export type DateRange = '12h' | '24h' | 'today' | '7d' | '30d';
 export type SortBy = 'viewCount' | 'relevance' | 'date' | 'rating';
 export type ChannelSize = 'ALL' | 'SMALL' | 'MEDIUM' | 'LARGE';
 export type MinViews = 'ALL' | '1000' | '10000' | '100000';
@@ -22,5 +22,5 @@ export const DEFAULT_FILTERS: SearchFilters = {
     channelSize: 'ALL',
     minViews: 'ALL',
 };
- 
- 
+
+

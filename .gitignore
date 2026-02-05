@@ -14,7 +14,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
+# Dependencies
+node_modules/
 dist/
+public/*.exe
+dist-electron/
 build/
 *.tsbuildinfo
 

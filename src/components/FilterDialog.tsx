@@ -95,16 +95,17 @@ export function FilterDialog({ filters, onFilterChange, trigger }: FilterDialogP
                     </FilterSection>
 
                     {/* Duration Filter */}
-                    <FilterSection title="Duration" icon={Clock}>
+                    <FilterSection title="Video Type" icon={Clock}>
                         <FilterPill active={filters.duration === 'ALL'} onClick={() => handleDurationChange('ALL')}>All</FilterPill>
-                        <FilterPill active={filters.duration === 'SHORT'} onClick={() => handleDurationChange('SHORT')}>Shorts</FilterPill>
-                        <FilterPill active={filters.duration === 'MEDIUM'} onClick={() => handleDurationChange('MEDIUM')}>Medium</FilterPill>
-                        <FilterPill active={filters.duration === 'LONG'} onClick={() => handleDurationChange('LONG')}>Long</FilterPill>
+                        <FilterPill active={filters.duration === 'SHORT'} onClick={() => handleDurationChange('SHORT')}>Shorts (9:16)</FilterPill>
+                        <FilterPill active={filters.duration === 'LONG'} onClick={() => handleDurationChange('LONG')}>Regular (16:9)</FilterPill>
                     </FilterSection>
 
                     {/* Date Range Filter */}
                     <FilterSection title="Uploaded In" icon={Calendar}>
+                        <FilterPill active={filters.dateRange === '12h'} onClick={() => handleDateRangeChange('12h')}>Last 12h</FilterPill>
                         <FilterPill active={filters.dateRange === '24h'} onClick={() => handleDateRangeChange('24h')}>Last 24h</FilterPill>
+                        <FilterPill active={filters.dateRange === 'today'} onClick={() => handleDateRangeChange('today')}>Today</FilterPill>
                         <FilterPill active={filters.dateRange === '7d'} onClick={() => handleDateRangeChange('7d')}>Last 7 Days</FilterPill>
                         <FilterPill active={filters.dateRange === '30d'} onClick={() => handleDateRangeChange('30d')}>Last 30 Days</FilterPill>
                     </FilterSection>
@@ -113,5 +114,5 @@ export function FilterDialog({ filters, onFilterChange, trigger }: FilterDialogP
         </Dialog>
     );
 }
- 
- 
+
+

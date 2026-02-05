@@ -48,8 +48,14 @@ export async function fetchTrendingVideos(
     // If user selected 24h, we ask API for recent stuff. If 7d or 30d, we use those.
     // If they said "ALL", we default to 30d to ensure some recency, or we can omit it.
     // Let's stick to the filter:
-    if (filters.dateRange === '24h') daysToSubtract = 1;
-    if (filters.dateRange === '30d') daysToSubtract = 30;
+    // Let's stick to the filter:
+    if (filters.dateRange === '12h') {
+        daysToSubtract = 0.5; // 12 hours
+    } else if (filters.dateRange === '24h' || filters.dateRange === 'today') {
+        daysToSubtract = 1;
+    } else if (filters.dateRange === '30d') {
+        daysToSubtract = 30;
+    }
 
     const publishedAfter = new Date(now.getTime() - daysToSubtract * 24 * 60 * 60 * 1000).toISOString();
 
@@ -62,7 +68,7 @@ export async function fetchTrendingVideos(
                 `part=snippet&` +
                 `q=${encodeURIComponent(niche)}&` +
                 `type=video&` +
-                `maxResults=15&` +
+                `maxResults=50&` +
                 `regionCode=${region}`;
 
             // Apply Filters to API Call
@@ -80,9 +86,18 @@ export async function fetchTrendingVideos(
             url += `&order=${order}`;
 
             // Duration
-            if (filters.duration === 'SHORT') url += `&videoDuration=short`;
-            if (filters.duration === 'MEDIUM') url += `&videoDuration=medium`;
-            if (filters.duration === 'LONG') url += `&videoDuration=long`;
+            if (filters.duration === 'SHORT') {
+                url += `&videoDuration=short`;
+            } else if (filters.duration === 'LONG') {
+                // User wants "Regular" (16:9), which effectively means NOT shorts.
+                // YouTube API splits this into 'medium' (4-20m) and 'long' (>20m).
+                // If we select 'medium', we miss long. If 'long', we miss medium.
+                // STRATEGY: Don't filter by duration in API, but filter OUT shorts (anything < 60s) on client side.
+                // This ensures we get everything > 1 min.
+            } else if (filters.duration === 'MEDIUM') {
+                // If legacy 'MEDIUM' is somehow passed, map to medium
+                url += `&videoDuration=medium`;
+            }
 
             // Pagination Token
             if (pageTokenMap && pageTokenMap[region]) {
